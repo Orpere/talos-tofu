@@ -1,4 +1,5 @@
 # talos-tofu
+to get the iso on this tutorial please follow [talos instructions](https://www.talos.dev/v1.10/talos-guides/install/virtualized-platforms/proxmox/)
 
 [this module use opentofu and the telmate provider for proxmox](https://search.opentofu.org/provider/telmate/proxmox/latest)
 
