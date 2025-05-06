@@ -11,7 +11,7 @@ export PM_PASS="password"
 
 change your main vars
 
-```json
+```bash
 module "talos-proxmox" {
   source = "./talos-proxmox"
   # Cluster configuration
