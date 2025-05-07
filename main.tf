@@ -23,3 +23,20 @@ output "control-planes" {
 output "workers" {
     value = module.talos-proxmox.worker_info
 }
+
+module "dns" {
+  source        = "./tofu-dns"
+  dns_server    = "ns.orp-dev.eu"
+  key_algorithm = "hmac-sha512"
+  key_name      = "orp-dns."
+  zone          = "orp-dev.eu."
+  key_secret    = var.key_secret
+
+  records = {
+    cp-talos0     = "192.168.0.100"
+    cp-talos1     = "192.168.0.101"
+    cp-talos2     = "192.168.0.102"
+    worker-talos0 = "192.168.0.103"
+    worker-talos1 = "192.168.0.104"
+  }
+}

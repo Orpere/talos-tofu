@@ -1,4 +1,5 @@
 # talos-tofu
+
 to get the iso on this tutorial please follow [talos instructions](https://www.talos.dev/v1.10/talos-guides/install/virtualized-platforms/proxmox/)
 
 [this module use opentofu and the telmate provider for proxmox](https://search.opentofu.org/provider/telmate/proxmox/latest)
@@ -66,3 +67,45 @@ workers = [
   "worker-talos0 - 192.168.0.101 - bc:24:11:07:57:5f",
 ]
 ```
+
+## dns
+
+## Install tallos
+
+create dns with tofu 
+
+```bash
+export TF_VAR_key_secret="your_real_secret_here"
+tofu init 
+tofu apply
+```
+
+check your dns
+
+```zsh
+ping worker-talos0.orp-dev.eu                                                                                                                                                                                                                                   ✔  13:51:58  
+PING worker-talos0.orp-dev.eu (192.168.0.103): 56 data bytes
+64 bytes from 192.168.0.103: icmp_seq=0 ttl=63 time=120.798 ms
+64 bytes from 192.168.0.103: icmp_seq=1 ttl=63 time=5.557 ms
+64 bytes from 192.168.0.103: icmp_seq=2 ttl=63 time=13.288 ms
+64 bytes from 192.168.0.103: icmp_seq=3 ttl=63 time=61.285 ms
+^C
+--- worker-talos0.orp-dev.eu ping statistics ---
+4 packets transmitted, 4 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 5.557/50.232/120.798/45.996 ms
+```
+
+
+## create a cluster  
+
+```txt
+control-planes
+cp-talos0 - 192.168.0.100 - bc:24:11:6d:81:07
+cp-talos1 - 192.168.0.101 - bc:24:11:3a:4c:7a
+cp-talos2 - 192.168.0.102 - bc:24:11:12:9f:5d
+workers
+worker-talos0 - 192.168.0.103 - bc:24:11:53:3b:10
+worker-talos1 - 192.168.0.104 - bc:24:11:64:ab:3e
+```
+
+## create a config
