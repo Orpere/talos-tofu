@@ -72,7 +72,7 @@ workers = [
 
 ## Install tallos
 
-create dns with tofu 
+create dns with tofu
 
 ```bash
 export TF_VAR_key_secret="your_real_secret_here"
@@ -94,7 +94,6 @@ PING worker-talos0.orp-dev.eu (192.168.0.103): 56 data bytes
 4 packets transmitted, 4 packets received, 0.0% packet loss
 round-trip min/avg/max/stddev = 5.557/50.232/120.798/45.996 ms
 ```
-
 
 ## create a cluster  
 
@@ -174,7 +173,7 @@ cluster:
 
 Once nodes are booted:
 
-#### 🧠 Apply to Control Planes:
+#### 🧠 Apply to Control Planes
 
 ```bash
 talosctl apply-config --insecure -n 192.168.0.100 -f controlplane.yaml
@@ -184,7 +183,7 @@ talosctl apply-config --insecure -n 192.168.0.102 -f controlplane.yaml
 
 > For each node, you must modify the static IP in the patch above before applying.
 
-#### ⚙️ Apply to Workers:
+#### ⚙️ Apply to Workers
 
 Worker IPs: `192.168.0.103`, `192.168.0.104`
 
