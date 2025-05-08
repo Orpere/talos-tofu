@@ -5,8 +5,8 @@ module "talos-proxmox" {
 
   # Control Plane Configuration
   cp_count     = 3
-  cp_cores     = 4
-  cp_memory    = 2048 # in MB
+  cp_cores     = 8
+  cp_memory    = 8196 # in MB
   cp_disk_size = 80   # in GB
 
   # Worker Node Configuration
