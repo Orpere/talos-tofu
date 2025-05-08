@@ -42,7 +42,7 @@ resource "proxmox_vm_qemu" "worker" {
     ide {
       ide2 {
         cdrom {
-          iso = "local:iso/talos.iso"
+          iso = "local:iso/talos-amd64.iso"
         }
       }
     }

@@ -15,6 +15,8 @@ resource "proxmox_vm_qemu" "control-plane" {
   vm_state    = "running"
   skip_ipv6   = true
 
+
+  
   # Network config
   network {
     id       = 0
@@ -41,7 +43,7 @@ resource "proxmox_vm_qemu" "control-plane" {
     ide {
       ide2 {
         cdrom {
-          iso = "local:iso/talos.iso"
+          iso = "local:iso/talos-amd64.iso"
         }
       }
     }
