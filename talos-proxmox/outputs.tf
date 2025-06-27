@@ -18,3 +18,7 @@ output "worker_info" {
     }
   ]
 }
+
+output "cluster_name" {
+  value = var.name
+}
