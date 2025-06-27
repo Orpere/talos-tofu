@@ -99,7 +99,7 @@ done
 
 # Get kubeconfig
 echo "Retrieving kubeconfig..."
-talosctl kubeconfig .
+talosctl kubeconfig $TALOS_MANIFESTS_DIR/.
 
 # Label worker nodes
 echo "Labeling worker nodes..."
