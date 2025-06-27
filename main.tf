@@ -47,8 +47,10 @@ resource "null_resource" "run_local_script" {
       echo "Control plane IP: $CONTROL_PLANE_IP"
       echo "Control plane IPs: $CONTROL_PLANE_IPS"
       echo "Worker IPs: $WORKER_IPS"
+      
+      chmod +x ./scripts/*.sh
 
-      ./scripts/install-talos.sh
+      ./scripts/install-talos.sh && ./scripts/config-cluster.sh
     EOT
   }
   depends_on = [module.talos-proxmox , module.dns]

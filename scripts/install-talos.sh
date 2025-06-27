@@ -50,16 +50,6 @@ talosctl bootstrap
 command sleep 300
 
 
-# Apply config to control plane nodes (excluding the first IP)
-IFS=',' read -ra CP_IPS <<< "$CONTROL_PLANE_IPS"
-for ((i=1; i<${#CP_IPS[@]}; i++)); do
-    ip="${CP_IPS[$i]}"
-    echo "Applying config to control plane node $ip..."
-    until talosctl apply-config --insecure --nodes "$ip" --file $TALOS_MANIFESTS_DIR/controlplane.yaml --timeout 5m; do
-        echo "Failed to apply config to $ip. Retrying in 120 seconds..."
-        command sleep 120
-    done
-done
 
 # Apply config to worker nodes one by one with retry
 IFS=',' read -ra WK_IPS <<< "$WORKER_IPS"
@@ -101,7 +91,15 @@ done
 echo "Retrieving kubeconfig..."
 talosctl kubeconfig $TALOS_MANIFESTS_DIR/.
 
-# Label worker nodes
-echo "Labeling worker nodes..."
-kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" get nodes --no-headers | grep -v control-plane | awk '{print $1}' | xargs -I{} kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" label node {} node-role.kubernetes.io/worker= --overwrite 
+# Apply config to control plane nodes (excluding the first IP)
+IFS=',' read -ra CP_IPS <<< "$CONTROL_PLANE_IPS"
+for ((i=1; i<${#CP_IPS[@]}; i++)); do
+    ip="${CP_IPS[$i]}"
+    echo "Applying config to control plane node $ip..."
+    until talosctl apply-config --insecure --nodes "$ip" --file $TALOS_MANIFESTS_DIR/controlplane.yaml --timeout 5m; do
+        echo "Failed to apply config to $ip. Retrying in 120 seconds..."
+        command sleep 120
+    done
+done
+ 
 echo "Talos cluster setup complete!"
