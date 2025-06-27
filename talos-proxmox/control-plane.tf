@@ -2,21 +2,27 @@ resource "proxmox_vm_qemu" "control-plane" {
   count       = var.cp_count
   name        = "cp-${var.name}${count.index}"
   target_node = "pve"
-  cores       = var.cp_cores
-  sockets     = 1
   memory      = var.cp_memory
   agent       = 1
   bios        = "seabios"
   boot        = "order=scsi0;ide2;net0"
   hotplug     = "network,disk,usb"
   qemu_os     = "l26"
-  cpu_type    = "x86-64-v2-AES"
   scsihw      = "virtio-scsi-single"
   vm_state    = "running"
   skip_ipv6   = true
 
+  # Cloud-init configuration
+  ciupgrade    = true
+  nameserver   = "192.168.0.254"
+  ipconfig0    = "ip=192.168.0.${100 + count.index}/24,gw=192.168.0.1"
+  searchdomain = "orp-dev.eu"
+  sshkeys      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICUYEeHSldG9XylMGNduRhSXSPMWAOnuiWIuSYSEroRm orlando.capoeiraraiz@gmail.com"
 
-  
+  cpu {
+    cores = var.cp_cores
+    # You can add more CPU options here if needed
+  }
   # Network config
   network {
     id       = 0
@@ -38,14 +44,22 @@ resource "proxmox_vm_qemu" "control-plane" {
         }
       }
     }
+    # cloud-init configuration
+
 
     # CD-ROM ISO (cloud-init or installer)
     ide {
-      ide2 {
-        cdrom {
-          iso = "local:iso/talos-amd64.iso"
+      ide1 {
+        cloudinit {
+          storage = "local"
         }
       }
+      ide2 {
+        cdrom {
+          iso = "local:iso/nocloud-amd64.iso"
+        }
+      }
+
     }
   }
 }

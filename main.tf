@@ -21,7 +21,7 @@ output "control-planes" {
 }
 
 output "workers" {
-    value = module.talos-proxmox.worker_info
+  value = module.talos-proxmox.worker_info
 }
 
 module "dns" {
@@ -32,11 +32,8 @@ module "dns" {
   zone          = "orp-dev.eu."
   key_secret    = var.key_secret
 
-  records = {
-    cp-talos0     = "192.168.0.100"
-    cp-talos1     = "192.168.0.101"
-    cp-talos2     = "192.168.0.102"
-    worker-talos0 = "192.168.0.103"
-    worker-talos1 = "192.168.0.104"
-  }
+  records = merge(
+    { for idx, obj in module.talos-proxmox.control_plane_info : "cp-talos${idx}" => obj.ip },
+    { for idx, obj in module.talos-proxmox.worker_info : "worker-talos${idx}" => obj.ip }
+  )
 }
