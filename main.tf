@@ -15,15 +15,7 @@ module "talos-proxmox" {
   worker_memory    = 8196 # in MB
   worker_disk_size = 100  # in GB
 }
-
-output "control-planes" {
-  value = module.talos-proxmox.control_plane_info
-}
-
-output "workers" {
-  value = module.talos-proxmox.worker_info
-}
-
+# DNS Configuration
 module "dns" {
   source        = "./tofu-dns"
   dns_server    = "ns.orp-dev.eu"
@@ -36,4 +28,13 @@ module "dns" {
     { for idx, obj in module.talos-proxmox.control_plane_info : "cp-talos${idx}" => obj.ip },
     { for idx, obj in module.talos-proxmox.worker_info : "worker-talos${idx}" => obj.ip }
   )
+}
+module "talos-cluster" {
+  source         = "./talos-cluster"
+  control_planes = module.talos-proxmox.control_plane_info
+  workers        = module.talos-proxmox.worker_info
+  # Talos cluster configuration
+  control_plane_ip  = module.talos-proxmox.control_plane_info[0].ip
+  cluster_name      = "my-talos-cluster"
+  talos_config_path = "~/.talos/config"
 }
