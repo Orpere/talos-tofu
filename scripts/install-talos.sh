@@ -2,15 +2,6 @@
 
 set -e
 
-# Set cluster and manifests directory as variables
-# export TALOS_CLUSTER_NAME="orp-cluster"
-# export TALOS_MANIFESTS_DIR="cluster"
-
-# Set node IPs as variables
-# export CONTROL_PLANE_IP=192.168.0.100
-# export CONTROL_PLANE_IPS="192.168.0.100,192.168.0.101,192.168.0.102"
-# export WORKER_IPS="192.168.0.111,192.168.0.112"
-
 # Check for --force flag
 FORCE_FLAG=""
 if [[ "$1" == "--force" ]]; then
