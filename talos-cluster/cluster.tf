@@ -1,5 +1,7 @@
+## This file is part of the Talos cluster configuration.
 resource "talos_machine_secrets" "this" {}
 
+# Define the Talos machine configuration for control plane and worker nodes
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = var.cluster_name
   machine_type     = "controlplane"
@@ -31,10 +33,20 @@ resource "talos_machine_configuration_apply" "worker" {
 }
 
 
+
 # Bootstrap the Kubernetes cluster on the first control plane node
 resource "talos_machine_bootstrap" "main" {
   node                 = var.control_plane_ip
   client_configuration = talos_machine_secrets.this.client_configuration
+}
+
+resource "talos_cluster_kubeconfig" "main" {
+  node                 = var.control_plane_ip
+  client_configuration = talos_machine_secrets.this.client_configuration
+  endpoint             = "https://${var.control_plane_ip}:6443"
+  depends_on = [
+    talos_machine_bootstrap.main
+  ]
 }
 
 data "talos_client_configuration" "main" {
@@ -43,13 +55,8 @@ data "talos_client_configuration" "main" {
   nodes                = [for cp in var.control_planes : cp.ip]
 }
 
-resource "talos_cluster_kubeconfig" "main" {
-  node                 = var.control_plane_ip
-  client_configuration = talos_machine_secrets.this.client_configuration
-  endpoint             = "https://${var.control_plane_ip}:6443"
-  depends_on = [
-    talos_machine_bootstrap.main,
-    talos_machine_configuration_apply.controlplane,
-    talos_machine_configuration_apply.worker
-  ] 
+resource "local_file" "talos_kubeconfig" {
+  filename        = pathexpand(var.talos_config_path)
+  content         = talos_cluster_kubeconfig.main.kubeconfig_raw
+  file_permission = "0600"
 }

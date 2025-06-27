@@ -34,7 +34,10 @@ module "talos-cluster" {
   control_planes = module.talos-proxmox.control_plane_info
   workers        = module.talos-proxmox.worker_info
   # Talos cluster configuration
-  control_plane_ip  = module.talos-proxmox.control_plane_info[0].ip
-  cluster_name      = "my-talos-cluster"
-  talos_config_path = "~/.talos/config"
+  control_plane_ip       = module.talos-proxmox.control_plane_info[0].ip
+  cluster_name           = "my-talos-cluster"
+  talos_config_path      = "~/.talos/config"
+  client_certificate     = "~/.talos/client.crt"
+  client_key             = "~/.talos/client.key"
+  cluster_ca_certificate = "~/.talos/ca.crt"
 }

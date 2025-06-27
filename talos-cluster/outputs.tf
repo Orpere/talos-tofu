@@ -1,5 +1,5 @@
-
 output "kubeconfig" {
-  value     = data.talos_client_configuration.main
+  value     = talos_cluster_kubeconfig.main.kubeconfig_raw
+  description = "Kubeconfig for the Talos cluster"
   sensitive = true
 }

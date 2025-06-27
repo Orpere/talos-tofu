@@ -12,14 +12,6 @@ variable "talos_config_path" {
   description = "The version of Talos to use"
   type        = string
   default     = "~/.talos/config"
-
-}
-
-variable "control_planes" {
-  description = "List of control plane nodes with their IPs"
-  type = list(object({
-    ip = string
-  }))
 }
 variable "client_certificate" {
   description = "Path to the client certificate for Kubernetes API access"
@@ -35,6 +27,13 @@ variable "cluster_ca_certificate" {
   description = "Path to the cluster CA certificate for Kubernetes API access"
   type        = string
   default     = "~/.talos/ca.crt"
+}
+
+variable "control_planes" {
+  description = "List of control plane nodes with their IPs"
+  type = list(object({
+    ip = string
+  }))
 }
 
 variable "workers" {
