@@ -4,13 +4,13 @@ module "talos-proxmox" {
   name = "talos"
 
   # Control Plane Configuration
-  cp_count     = 3
+  cp_count     = 1
   cp_cores     = 8
   cp_memory    = 8196 # in MB
   cp_disk_size = 80   # in GB
 
   # Worker Node Configuration
-  worker_count     = 2
+  worker_count     = 3
   worker_cores     = 8
   worker_memory    = 8196 # in MB
   worker_disk_size = 100  # in GB
@@ -30,10 +30,10 @@ module "dns" {
   )
 }
 
-resource "null_resource" "run_local_script" {
+resource "null_resource" "install_talos" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
-    command = <<-EOT
+    command     = <<-EOT
       set -e
       sleep 60 # Wait for Terraform to finish provisioning
 
@@ -50,8 +50,23 @@ resource "null_resource" "run_local_script" {
       
       chmod +x ./scripts/*.sh
 
-      ./scripts/install-talos.sh && ./scripts/config-cluster.sh
+      ./scripts/install-talos.sh
     EOT
   }
-  depends_on = [module.talos-proxmox , module.dns]
+  depends_on = [module.talos-proxmox, module.dns]
+}
+
+resource "null_resource" "install_apps" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -e
+      chmod +x ./scripts/*.sh
+
+      export TALOS_MANIFESTS_DIR="cluster/${module.talos-proxmox.cluster_name}"
+
+      ./scripts/config-cluster.sh
+    EOT
+  }
+  depends_on = [module.talos-proxmox]
 }

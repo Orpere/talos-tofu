@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 # Label worker nodes
@@ -8,9 +7,10 @@ kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" get nodes --no-headers | 
 
 echo "install nginx-ingress"
 kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+echo "create namespace metallb"
+kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" create namespace metallb-system || true
 echo "install metallb"
-kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.0/manifests/namespace.yaml
-kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.0/manifests/metallb.yaml 
+kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
 
 # Create a ConfigMap for MetalLB
 echo "Creating MetalLB ConfigMap..."
