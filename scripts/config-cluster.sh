@@ -11,7 +11,8 @@ echo "create namespace metallb"
 kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" create namespace metallb-system || true
 echo "install metallb"
 kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
-
+exho "Waiting for MetalLB to be ready..."
+command sleep 60
 # Create a ConfigMap for MetalLB
 echo "Creating MetalLB ConfigMap..."
 cat <<EOF | kubectl --kubeconfig="$TALOS_MANIFESTS_DIR/kubeconfig" apply -f -
