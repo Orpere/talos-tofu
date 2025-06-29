@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "proxmox" {
-  pm_api_url      = "https://pve.orp-dev.eu:8006/api2/json"
+  pm_api_url      = "https://pve.${var.prox_domain}:8006/api2/json"
   pm_tls_insecure = true # i have gen my certs on letsencrypt using cf plugin and acme
 }
 

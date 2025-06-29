@@ -16,7 +16,7 @@ resource "proxmox_vm_qemu" "control-plane" {
   ciupgrade    = true
   nameserver   = var.nameserver
   ipconfig0    = "ip=${var.prox_cir}.${100 + count.index}/24,gw=${var.prox_cir}.1"
-  searchdomain = "orp-dev.eu"
+  searchdomain = var.prox_domain
   sshkeys      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICUYEeHSldG9XylMGNduRhSXSPMWAOnuiWIuSYSEroRm orlando.capoeiraraiz@gmail.com"
 
   cpu {

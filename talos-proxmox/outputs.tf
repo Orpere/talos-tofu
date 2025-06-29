@@ -22,3 +22,10 @@ output "worker_info" {
 output "cluster_name" {
   value = var.name
 }
+
+output "worker_ips" {
+  value = var.worker_ips
+}
+output "control_plane_ips" {
+  value = var.control_planes_ips
+}

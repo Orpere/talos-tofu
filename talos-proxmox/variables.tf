@@ -64,9 +64,28 @@ variable "nameserver" {
   default     = "192.168.0.254"
 }
 
+variable "prox_domain" {
+  description = "Proxmox domain for server"
+  type        = string
+  default     = "orp-dev.eu"
+
+}
+
 variable "talos_image" {
   description = "Talos image to use"
   type        = string
   default     = "nocloud-amd64.iso"
-  
+
+}
+# Add your variable declarations here
+
+variable "control_planes_ips" {
+  description = "List of control plane IP addresses"
+  type        = list(string)
+  default     = []
+}
+variable "worker_ips" {
+  description = "values for worker IPs"
+  type        = list(string)
+  default     = []
 }

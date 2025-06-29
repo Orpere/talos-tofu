@@ -1,111 +1,105 @@
-# talos-tofu
+# Talos Cluster on Proxmox with OpenTofu
 
-to get the iso on this tutorial please follow [talos instructions](https://www.talos.dev/v1.10/talos-guides/install/virtualized-platforms/proxmox/)
-
-[this module use opentofu and the telmate provider for proxmox](https://search.opentofu.org/provider/telmate/proxmox/latest)
-
-follow the instructions on the link above and export yur proxmox credentials
-
-```bash
-export PM_USER="terraform-prov@pve"
-export PM_PASS="password"
-```
-# Talos Proxmox Terraform Module
-
-This module provisions Talos Linux control plane and worker nodes as Proxmox VMs, with support for cloud-init and static IP assignment.
-
-## Requirements
-
-- Proxmox VE
-- Terraform >= 1.0
-- Proxmox Terraform Provider (latest)
-- Talos Linux image (optionally with cloud-init extension)
-- ISO uploaded to Proxmox storage (e.g. `local:iso/${talos_image}`)
-
-## Usage
-
-```hcl
-module "talos-proxmox" {
-  source = "./talos-proxmox"
-  name = "talos"
-
-  # Control Plane
-  cp_count     = 3
-  cp_cores     = 8
-  cp_memory    = 8196
-  cp_disk_size = 80
-
-  # Worker Nodes
-  worker_count     = 2
-  worker_cores     = 8
-  worker_memory    = 8196
-  worker_disk_size = 100
-}
-
-module "dns" {
-  source        = "./tofu-dns"
-  dns_server    = "ns.orp-dev.eu"
-  key_algorithm = "hmac-sha512"
-  key_name      = "orp-dns."
-  zone          = "orp-dev.eu."
-  key_secret    = var.key_secret
-
-  records = merge(
-    { for idx, obj in module.talos-proxmox.control_plane_info : "cp-talos${idx}" => obj.ip },
-    { for idx, obj in module.talos-proxmox.worker_info : "worker-talos${idx}" => obj.ip }
-  )
-}
-```
-
-## Notable Changes
-
-- **CPU configuration**:  
-  Use the `cpu` block with `cores` for both control-plane and worker VMs:
-  ```hcl
-  cpu {
-    cores = var.cp_cores
-  }
-  ```
-  Remove any top-level `cores`, `vcpus`, or `sockets` arguments.
-
-- **Static IP assignment**:  
-  IPs are assigned using:
-  ```hcl
-  ipconfig0 = "ip=192.168.0.${100 + count.index}/24,gw=192.168.0.1"
-  ```
-  Adjust the range as needed.
-
-- **Cloud-init**:  
-  The VM attaches a cloud-init ISO and uses the `cloudinit` block for SSH keys and network config.
-
-- **IPv6**:  
-  Disabled by default with `skip_ipv6 = true` and no `ip6=dhcp` in `ipconfig0`.
-
-## Formatting
-
-To format all Terraform files recursively:
-```sh
-terraform fmt -recursive
-```
-
-## Outputs
-
-- `control_plane_info`: List of objects with at least an `ip` attribute for each control plane node.
-- `worker_info`: List of objects with at least an `ip` attribute for each worker node.
-
-## Example Output
-
-```hcl
-output "control-planes" {
-  value = module.talos-proxmox.control_plane_info
-}
-
-output "workers" {
-  value = module.talos-proxmox.worker_info
-}
-```
+This project deploys a Talos Kubernetes cluster on Proxmox VMs using [OpenTofu](https://opentofu.org/) (Terraform fork).  
+It also configures DNS records for the cluster nodes.
 
 ---
 
-**Tip:**  
-If you see errors about unsupported attributes or deprecation warnings, ensure your module and provider versions are up to date and that you use the correct block/argument structure as shown above.
+## Project Structure
+
+- **talos-proxmox/**: Proxmox VM provisioning for control plane and worker nodes.
+- **tofu-dns/**: DNS record management for cluster nodes.
+- **cluster-talos/**: Talos cluster bootstrapping and configuration.
+- **main.tf**: Root OpenTofu configuration tying everything together.
+
+---
+
+## Requirements
+
+- [OpenTofu](https://opentofu.org/) or Terraform
+- [Proxmox](https://www.proxmox.com/) cluster with API access
+- [talosctl](https://www.talos.dev/docs/latest/introduction/what-is-talos/) and [kubectl](https://kubernetes.io/docs/tasks/tools/) installed locally
+- DNS server supporting dynamic updates (RFC2136)
+- SSH access to Proxmox nodes
+
+---
+
+## Usage
+
+1. **Clone this repository**
+
+   ```sh
+   git clone <your-repo-url>
+   cd <your-repo>
+   ```
+
+2. **Initialize OpenTofu**
+
+   ```sh
+   tofu init
+   ```
+
+3. **Set required variables**
+
+   - Create a `terraform.tfvars` or set variables via CLI/environment.
+   - Example for secrets:
+     ```hcl
+     key_secret = "your_dns_key_secret"
+     ```
+
+4. **Apply the configuration**
+
+   ```sh
+   tofu apply
+   ```
+
+5. **Access your cluster**
+
+   - The kubeconfig will be generated in `clusters_configs/<cluster-name>/kubeconfig`.
+   - Example:
+     ```sh
+     export KUBECONFIG=clusters_configs/talos-cluster/kubeconfig
+     kubectl get nodes
+     ```
+
+---
+
+## Module Overview
+
+### talos-proxmox
+
+- Provisions control plane and worker VMs on Proxmox.
+- Outputs node IPs for use in DNS and Talos modules.
+
+### tofu-dns
+
+- Creates DNS records for all cluster nodes using their provisioned IPs.
+
+### cluster-talos
+
+- Bootstraps the Talos cluster.
+- Applies Talos configs to all nodes.
+- Generates and outputs kubeconfig.
+
+---
+
+## Outputs
+
+- **control_plane_ip**: First control plane node IP
+- **control_plane_ips**: Comma-separated list of all control plane IPs
+- **worker_ips**: Comma-separated list of all worker node IPs
+- **kubeconfig**: Path to generated kubeconfig
+
+---
+
+## Notes
+
+- Ensure your Proxmox and DNS credentials are set correctly.
+- The cluster will not be accessible until all Talos steps complete.
+- You may need to manually create the `clusters_configs/` directory before running `tofu apply`.
+
+---
+
+## License
+
+MIT
