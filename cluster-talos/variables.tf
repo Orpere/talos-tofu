@@ -1,4 +1,24 @@
-variable "packages" {
+
+variable "name" {
+  type    = string
+  default = "talos-cluster"
+}
+
+# variable "control_plane_ip" {
+#   type    = string
+#   default = "192.168.0.100"
+# }
+
+variable "control_plane_port" {
+  type    = number
+  default = 6443
+}
+
+variable "control_planes_ips" {
   type    = list(string)
-  default = ["git", "curl", "htop", "talosctl"]
+  default = []
+}
+variable "worker_ips" {
+  type    = list(string)
+  default = []
 }

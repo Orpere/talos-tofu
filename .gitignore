@@ -9,4 +9,4 @@
 *.tfstate.json
 tofu.log
 orp-dns
-cluster
+clusters_configs

@@ -1,3 +1,9 @@
+variable "packages" {
+  type    = list(string)
+  default = ["git", "curl", "htop", "talosctl"]
+}
+
+
 variable "name" {
   description = "cluster name"
   type        = string

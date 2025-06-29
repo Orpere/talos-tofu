@@ -5,7 +5,7 @@ resource "null_resource" "check_and_install" {
 
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
-    command = <<EOT
+    command     = <<EOT
       PACKAGE=${var.packages[count.index]}
       echo "Checking if $PACKAGE is installed..."
 

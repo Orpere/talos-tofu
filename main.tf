@@ -29,3 +29,13 @@ module "dns" {
     { for idx, obj in module.talos-proxmox.worker_info : "worker-talos${idx}" => obj.ip }
   )
 }
+
+# Talos Cluster
+module "cluster-talos" {
+  source             = "./cluster-talos"
+  name               = "talos-cluster"
+  depends_on         = [module.talos-proxmox, module.dns]
+  control_planes_ips = module.talos-proxmox.control_plane_info[*].ip
+  control_plane_port = 6443
+  worker_ips         = module.talos-proxmox.worker_info[*].ip
+}
