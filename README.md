@@ -143,13 +143,11 @@ To access your Kubernetes cluster, run:
 - cert-manager you need to create your issuer and add your secrets 
 
 ```bash
-create the secret
-```bash
+#create the secret
 
 kubectl create secret generic cloudflare-api-token-secret \
   --from-literal=api-token='CLOUDFLARE_API_TOKEN_HERE' -n cert-manager
 ``` 
-```
 
 - for external-dns create a tsig-secret as example:
 
