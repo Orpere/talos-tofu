@@ -140,6 +140,17 @@ To access your Kubernetes cluster, run:
 - The cluster will not be accessible until all Talos steps complete.
 - You may need to manually create the `clusters_configs/` directory before running `tofu apply`.
 - All resources are managed via OpenTofu—destroying the stack will remove all VMs and DNS records.
+- cert-manager you need to create your issuer and add your secrets 
+
+```bash
+create the secret
+```bash
+
+kubectl create secret generic cloudflare-api-token-secret \
+  --from-literal=api-token='CLOUDFLARE_API_TOKEN_HERE' -n cert-manager
+``` 
+```
+
 - for external-dns create a tsig-secret as example:
 
 ```bash
