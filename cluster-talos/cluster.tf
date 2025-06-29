@@ -121,24 +121,3 @@ resource "null_resource" "wait_for_k8s_nodes" {
   }
   depends_on = [null_resource.talos_kubeconfig]
 }
-
-resource "null_resource" "install_apps" {
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      set -e
-      export KUBECONFIG=${path.cwd}/clusters_configs/${var.name}/kubeconfig
-
-      # Install a Helm chart (example: nginx-ingress)
-      helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-      helm repo update
-      helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace
-
-      # Apply a Kubernetes manifest
-      kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
-      command sleep 60 
-      kubectl apply -f manifests/metallb_config.yaml
-    EOT
-  }
-  depends_on = [null_resource.wait_for_k8s_nodes]
-}
