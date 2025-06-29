@@ -1,0 +1,25 @@
+provider:  # @schema type: [object, string];
+  name: rfc2136
+extraArgs:
+  - --rfc2136-host=ns.orp-dev.eu
+  - --rfc2136-port=53
+  - --rfc2136-zone=orp-dev.eu
+  - --rfc2136-tsig-secret-alg=hmac-sha512
+  - --rfc2136-tsig-axfr
+  - --rfc2136-tsig-keyname=orp-dns
+policy: sync
+registry: txt
+
+env:
+  - name: "EXTERNAL_DNS_RFC2136_TSIG_SECRET"
+    valueFrom:
+      secretKeyRef:
+        name: rfc2136-keys
+        key: rfc2136-tsig-secret
+  - name: "EXTERNAL_DNS_RFC2136_TSIG_KEYNAME"
+    valueFrom:
+      secretKeyRef:
+        name: rfc2136-keys
+        key: rfc2136-tsig-keyname
+
+  # kubectl create secret generic rfc2136-keys --from-literal=rfc2136-tsig-secret='<your secret>' --from-literal=rfc2136-tsig-keyname='k8s-external-dns-key' -n external-dns

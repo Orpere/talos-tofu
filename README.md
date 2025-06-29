@@ -140,7 +140,11 @@ To access your Kubernetes cluster, run:
 - The cluster will not be accessible until all Talos steps complete.
 - You may need to manually create the `clusters_configs/` directory before running `tofu apply`.
 - All resources are managed via OpenTofu—destroying the stack will remove all VMs and DNS records.
+- for external-dns create a tsig-secret as example:
 
+```bash
+kubectl create secret generic rfc2136-keys --from-literal=rfc2136-tsig-secret='<your secret>' --from-literal=rfc2136-tsig-keyname='k8s-external-dns-key' -n external-dns
+```
 ---
 
 ## License

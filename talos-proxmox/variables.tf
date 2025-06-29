@@ -1,6 +1,6 @@
 variable "packages" {
   type    = list(string)
-  default = ["git", "curl", "helm", "kustomize", "htop", "talosctl"]
+  default = ["git", "curl", "helm", "kustomize", "htop", "talosctl", "helmfile"]
 }
 
 
