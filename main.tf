@@ -40,12 +40,12 @@
 #   depends_on         = [module.talos-proxmox, module.dns]
 # }
 module "talos-proxmox" {
-  source        = "./talos-proxmox"
-  name          = "talos"
-  cp_count      = 1
-  cp_cores      = 8
-  cp_memory     = 8196
-  cp_disk_size  = 80
+  source           = "./talos-proxmox"
+  name             = "talos"
+  cp_count         = 1
+  cp_cores         = 8
+  cp_memory        = 8196
+  cp_disk_size     = 80
   worker_count     = 3
   worker_cores     = 8
   worker_memory    = 8196
