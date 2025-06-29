@@ -7,6 +7,5 @@
 *.tfplan.*
 *.tfvars.json
 *.tfstate.json
-tofu.log
-orp-dns
 clusters_configs
+.env
