@@ -136,6 +136,7 @@ resource "null_resource" "install_apps" {
 
       # Apply a Kubernetes manifest
       kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
+      command sleep 60 
       kubectl apply -f manifests/metallb_config.yaml
     EOT
   }
