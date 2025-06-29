@@ -3,7 +3,7 @@
 resource "null_resource" "talos_config" {
 
   provisioner "local-exec" {
-    command = "talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name}"
+    command = "talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name} --force"
   }
 }
 resource "null_resource" "talos_apply_controlplane_config" {
@@ -88,3 +88,56 @@ resource "null_resource" "talos_kubeconfig" {
 
 
 
+
+resource "null_resource" "wait_for_k8s_nodes" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -e
+      export KUBECONFIG=${path.cwd}/clusters_configs/${var.name}/kubeconfig
+
+      # List of expected nodes (IPs or hostnames)
+      expected_nodes="${join(" ", concat(var.control_planes_ips, var.worker_ips))}"
+
+      echo "Waiting for all Kubernetes nodes to be Ready..."
+      for i in {1..60}; do
+        ready_nodes=$(kubectl get nodes --no-headers | awk '$2 == "Ready" {print $1}' | wc -l)
+        total_nodes=$(echo $expected_nodes | wc -w)
+        if [ "$ready_nodes" -eq "$total_nodes" ]; then
+          echo "All $total_nodes nodes are Ready."
+          break
+        fi
+        echo "Ready nodes: $ready_nodes/$total_nodes. Waiting 10s and retrying... ($i/60)"
+        sleep 10
+        if [ $i -eq 60 ]; then
+          echo "Timeout waiting for all nodes to be Ready."
+          exit 1
+        fi
+      done
+
+      # Run your kubectl command here, for example:
+      kubectl get nodes --no-headers | grep -v control-plane | awk '{print $1}' | xargs -I{} kubectl label node {} node-role.kubernetes.io/worker= --overwrite
+    EOT
+  }
+  depends_on = [null_resource.talos_kubeconfig]
+}
+
+resource "null_resource" "install_apps" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -e
+      export KUBECONFIG=${path.cwd}/clusters_configs/${var.name}/kubeconfig
+
+      # Install a Helm chart (example: nginx-ingress)
+      helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+      helm repo update
+      helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace
+
+      # Apply a Kubernetes manifest
+      kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
+      kubectl apply -f ${path.cwd}/manifests/metallb_config.yaml
+    EOT
+  }
+  depends_on = [null_resource.wait_for_k8s_nodes]
+}
