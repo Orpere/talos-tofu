@@ -116,7 +116,7 @@ resource "null_resource" "wait_for_k8s_nodes" {
       done
 
       # Run your kubectl command here, for example:
-      kubectl get nodes --no-headers | grep -v control-plane | awk '{print $1}' | xargs -I{} kubectl label node {} node-role.kubernetes.io/worker= --overwrite
+      kubectl get nodes --no-headers | grep -v control-plane | awk '{print $1}' | xargs -I{} kubectl label node {} node-role.kubernetes.io/worker-node= --overwrite
     EOT
   }
   depends_on = [null_resource.talos_kubeconfig]
@@ -136,7 +136,7 @@ resource "null_resource" "install_apps" {
 
       # Apply a Kubernetes manifest
       kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
-      kubectl apply -f ${path.cwd}/manifests/metallb_config.yaml
+      kubectl apply -f manifests/metallb_config.yaml
     EOT
   }
   depends_on = [null_resource.wait_for_k8s_nodes]
