@@ -29,3 +29,7 @@ output "worker_ips" {
 output "control_plane_ips" {
   value = var.control_planes_ips
 }
+
+output "prox_domain" {
+  value = var.prox_domain
+}

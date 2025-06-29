@@ -1,27 +1,4 @@
 
-# output "control_plane_ip" {
-#   value = module.talos-proxmox.control_plane_info[0].ip
-# }
-# output "control_plane_ips" {
-#   value = join(",", [for obj in module.talos-proxmox.control_plane_info : obj.ip])
-# }
-
-# output "worker_ips" {
-#   value = join(",", [for obj in module.talos-proxmox.worker_info : obj.ip])
-# }
-
-# output "kubernetes_url" {
-#   value = module.cluster-talos.kubernetes_url
-# }
-
-# output "kubeconfig" {
-#   value = "${path.cwd}/${module.cluster-talos.kubeconfig}"
-# }
-
-# output "talosconfig" {
-#   value = module.cluster-talos.talosconfig
-# }
-
 output "talos_k8s_details" {
   value = <<-EOT
 PlEASE FEEL FREE TO GET YOUR CLUSTER DETAILS BELOW:
@@ -37,5 +14,8 @@ To access your Kubernetes cluster, run:
    export KUBECONFIG=${path.cwd}/${module.cluster-talos.kubeconfig}
    kubectl get nodes
 
+To use the dns you have config your A records are:
+${join("\n   ", [for name, addresses in module.dns.dns_a_records : "${name}.${module.talos-proxmox.prox_domain} -> ${join(", ", addresses)}"])} 
 EOT
 }
+
