@@ -3,7 +3,7 @@
 resource "null_resource" "talos_config" {
 
   provisioner "local-exec" {
-    command = "talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name} --force"
+    command = "talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name} --force"
   }
 }
 resource "null_resource" "talos_apply_controlplane_config" {
