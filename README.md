@@ -20,7 +20,7 @@ This module provisions Talos Linux control plane and worker nodes as Proxmox VMs
 - Terraform >= 1.0
 - Proxmox Terraform Provider (latest)
 - Talos Linux image (optionally with cloud-init extension)
-- ISO uploaded to Proxmox storage (e.g. `local:iso/nocloud-amd64.iso`)
+- ISO uploaded to Proxmox storage (e.g. `local:iso/${talos_image}`)
 
 ## Usage
 

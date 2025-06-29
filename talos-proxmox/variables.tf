@@ -51,3 +51,22 @@ variable "worker_disk_size" {
   type        = number
   default     = 80
 }
+
+variable "prox_cir" {
+  description = "Proxmox range for IP allocation"
+  type        = string
+  default     = "192.168.0"
+}
+
+variable "nameserver" {
+  description = "Nameserver for server"
+  type        = string
+  default     = "192.168.0.254"
+}
+
+variable "talos_image" {
+  description = "Talos image to use"
+  type        = string
+  default     = "nocloud-amd64.iso"
+  
+}

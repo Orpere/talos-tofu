@@ -14,8 +14,8 @@ resource "proxmox_vm_qemu" "control-plane" {
 
   # Cloud-init configuration
   ciupgrade    = true
-  nameserver   = "192.168.0.254"
-  ipconfig0    = "ip=192.168.0.${100 + count.index}/24,gw=192.168.0.1"
+  nameserver   = var.nameserver
+  ipconfig0    = "ip=${var.prox_cir}.${100 + count.index}/24,gw=${var.prox_cir}.1"
   searchdomain = "orp-dev.eu"
   sshkeys      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICUYEeHSldG9XylMGNduRhSXSPMWAOnuiWIuSYSEroRm orlando.capoeiraraiz@gmail.com"
 
@@ -56,7 +56,7 @@ resource "proxmox_vm_qemu" "control-plane" {
       }
       ide2 {
         cdrom {
-          iso = "local:iso/nocloud-amd64.iso"
+          iso = "local:iso/${var.talos_image}"
         }
       }
 
