@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mylab-page
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1.0">
+      <title>My Kubernetes Lab</title>
+      <style>
+        body {
+          background: linear-gradient(135deg, #0f2027, #2c5364);
+          color: #fff;
+          font-family: 'Segoe UI', Arial, sans-serif;
+          margin: 0;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .container {
+          background: rgba(44, 83, 100, 0.85);
+          border-radius: 16px;
+          box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+          padding: 2rem 3rem;
+          max-width: 500px;
+          text-align: center;
+        }
+        h1 {
+          font-size: 2.5rem;
+          margin-bottom: 0.5rem;
+          letter-spacing: 2px;
+        }
+        h2 {
+          font-size: 1.3rem;
+          font-weight: 400;
+          margin-bottom: 1.5rem;
+          color: #b2bec3;
+        }
+        .info {
+          background: rgba(255,255,255,0.07);
+          border-radius: 8px;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+          font-size: 1rem;
+          color: #dff9fb;
+        }
+        .links {
+          margin: 1.5rem 0;
+        }
+        .links a {
+          display: block;
+          margin: 0.5rem 0;
+          color: #00b894;
+          text-decoration: none;
+          font-weight: bold;
+          font-size: 1.1rem;
+          transition: color 0.2s;
+        }
+        .links a:hover {
+          color: #0984e3;
+        }
+        a.button {
+          display: inline-block;
+          background: #00b894;
+          color: #fff;
+          padding: 0.75rem 2rem;
+          border-radius: 8px;
+          text-decoration: none;
+          font-weight: bold;
+          transition: background 0.2s;
+          margin-top: 1rem;
+        }
+        a.button:hover {
+          background: #0984e3;
+        }
+        .footer {
+          margin-top: 2rem;
+          font-size: 0.9rem;
+          color: #636e72;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>My Kubernetes Lab</h1>
+        <h2>🚀 Your Kubernetes is Ready & Secured with SSL!</h2>
+        <div class="info">
+          <p>
+            Welcome to your Talos-powered Kubernetes lab.<br>
+            <strong>SSL is enabled</strong> via cert-manager and Let's Encrypt.<br>
+          </p>
+        </div>
+        <div class="links">
+          <a href="https://www.talos.dev/" target="_blank">Talos Linux</a>
+          <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank">ArgoCD</a>
+          <a href="https://github.com/kubernetes-sigs/external-dns" target="_blank">External-DNS</a>
+          <a href="https://cert-manager.io/" target="_blank">cert-manager</a>
+        </div>
+        <a class="button" href="https://kubernetes.io/docs/" target="_blank">Learn Kubernetes</a>
+        <div class="footer">
+          &copy; 2025 Talos Tofu Project
+        </div>
+      </div>
+    </body>
+    </html>
