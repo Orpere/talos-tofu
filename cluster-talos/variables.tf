@@ -17,3 +17,18 @@ variable "worker_ips" {
   type    = list(string)
   default = []
 }
+
+variable "tsig_secret" {
+  type    = string
+  default = ""
+}
+
+variable "tsig_keyname" {
+  type    = string
+  default = ""
+}
+
+variable "cloudflare_api_token" {
+  type    = string
+  default = ""
+}

@@ -89,6 +89,7 @@ resource "null_resource" "talos_kubeconfig" {
       set -e
       export TALOSCONFIG=clusters_configs/${var.name}/talosconfig
       talosctl config endpoint ${var.control_planes_ips[0]}
+      command rm -fr clusters_configs/${var.name}/kubeconfig
       talosctl kubeconfig  clusters_configs/${var.name}/.
     EOT
   }

@@ -25,10 +25,13 @@ module "dns" {
 }
 
 module "cluster-talos" {
-  source             = "./cluster-talos"
-  name               = "talos-cluster"
-  control_plane_port = 6443
-  control_planes_ips = module.talos-proxmox.control_plane_info[*].ip
-  worker_ips         = module.talos-proxmox.worker_info[*].ip
-  depends_on         = [module.talos-proxmox, module.dns]
+  source               = "./cluster-talos"
+  name                 = "talos-cluster"
+  control_plane_port   = 6443
+  control_planes_ips   = module.talos-proxmox.control_plane_info[*].ip
+  worker_ips           = module.talos-proxmox.worker_info[*].ip
+  depends_on           = [module.talos-proxmox, module.dns]
+  tsig_secret          = var.key_secret
+  tsig_keyname         = var.tsig_keyname
+  cloudflare_api_token = var.cloudflare_api_token
 }

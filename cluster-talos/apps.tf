@@ -32,6 +32,9 @@ resource "null_resource" "kustomize_apps" {
       kubectl apply -f apps/manifests/crds/
       command sleep 60
       kubectl apply -f apps/manifests/overlays/
+      command sleep 60
+      kubectl create secret generic rfc2136-keys --from-literal=rfc2136-tsig-secret='${var.tsig_secret}' --from-literal=rfc2136-tsig-keyname='${var.tsig_keyname}' -n external-dns
+      kubectl create secret generic cloudflare-api-token-secret --from-literal=api-token=${var.cloudflare_api_token}  -n cert-manager
     EOT
   }
   triggers = {
