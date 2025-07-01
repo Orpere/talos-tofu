@@ -23,16 +23,15 @@ resource "null_resource" "kustomize_apps" {
     command     = <<-EOT
       set -e
       export KUBECONFIG=${path.cwd}/clusters_configs/${var.name}/kubeconfig
-
       # Apply a Kubernetes manifest
-
       kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
-      sleep 60
+      command sleep 60
       # on folder manifests
       # you can put your kustomize manifests
       # or kubernetes manifests 
-      kubectl apply -f apps/manifests/
-
+      kubectl apply -f apps/manifests/crds/
+      command sleep 60
+      kubectl apply -f apps/manifests/overlays/
     EOT
   }
   triggers = {

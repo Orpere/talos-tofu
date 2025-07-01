@@ -1,9 +1,18 @@
 #create a talos cluster 
 
 resource "null_resource" "talos_config" {
-
   provisioner "local-exec" {
-    command = "talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name} --force"
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -e
+      CONFIG_FILE="clusters_configs/${var.name}/talosconfig"
+      if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Talos config file not found at $CONFIG_FILE. Generating..."
+        talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name}
+      else
+        echo "Talos config file already exists. Skipping generation."
+      fi
+    EOT
   }
 }
 resource "null_resource" "talos_apply_controlplane_config" {
@@ -54,7 +63,7 @@ resource "null_resource" "talos_bootstrap" {
       export TALOSCONFIG=clusters_configs/${var.name}/talosconfig
 
       # Wait for Talos endpoint to be available on port 50000
-      for i in {1..30}; do
+      for i in {1..120}; do
         if nc -z ${var.control_planes_ips[0]} 50000; then
           echo "Talos endpoint is available on port 50000."
           talosctl config endpoint ${var.control_planes_ips[0]}

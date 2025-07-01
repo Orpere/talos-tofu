@@ -1,4 +1,7 @@
-installCRDs: true
 extraArgs:
   - --dns01-recursive-nameservers-only
   - --dns01-recursive-nameservers=1.1.1.1:53
+  # The default private key rotation policy for Certificate resources changed
+  # to 'Always' in cert-manager v1.18. To revert to the old 'Never' behavior
+  # and suppress this warning, uncomment the following line.
+  # - --feature-gates=DefaultPrivateKeyRotationPolicyAlways=false
