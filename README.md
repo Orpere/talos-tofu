@@ -1,161 +1,106 @@
-# Talos Kubernetes Cluster on Proxmox with OpenTofu
+## 🔧 Terraform/OpenTofu Configuration
 
-This project provisions a Talos-based Kubernetes cluster on Proxmox VMs using [OpenTofu](https://opentofu.org/) (Terraform fork).  
-It also manages DNS records for your cluster nodes and automates cluster bootstrapping and application installation.
+### `main.tf` Overview
 
----
+```hcl
+module "talos-proxmox" {
+  source           = "./talos-proxmox"
+  name             = "talos"
+  cp_count         = 3
+  cp_cores         = 8
+  cp_memory        = 8196
+  cp_disk_size     = 80
+  worker_count     = 3
+  worker_cores     = 8
+  worker_memory    = 8196
+  worker_disk_size = 100
+}
 
-## Project Structure
+module "dns" {
+  source        = "./tofu-dns"
+  dns_server    = var.dns_server
+  key_algorithm = var.dns_key_algorithm
+  key_name      = var.dns_key_name
+  key_secret    = var.dns_key_secret
+  zone          = var.dns_zone
 
-- **main.tf** – Root OpenTofu configuration, wiring all modules together.
-- **talos-proxmox/** – Proxmox VM provisioning for control plane and worker nodes.
-- **tofu-dns/** – DNS record management for cluster nodes.
-- **cluster-talos/** – Talos cluster bootstrapping, configuration, and app installation.
-- **manifests/** – (Optional) Your custom Kubernetes manifests to be applied after cluster setup.
+  records = merge(
+    { for idx, obj in module.talos-proxmox.control_plane_info : "cp-talos${idx}" => obj.ip },
+    { for idx, obj in module.talos-proxmox.worker_info : "worker-talos${idx}" => obj.ip }
+  )
+}
 
----
-
-## Requirements
-
-- [OpenTofu](https://opentofu.org/) or Terraform
-- [Proxmox](https://www.proxmox.com/) cluster with API access
-- [talosctl](https://www.talos.dev/docs/latest/introduction/what-is-talos/) and [kubectl](https://kubernetes.io/docs/tasks/tools/) installed locally
-- [Helm](https://helm.sh/) installed locally
-- DNS server supporting dynamic updates (RFC2136)
-- SSH access to Proxmox nodes
-
----
-
-## How to Make This Project Yours
-
-1. **Clone the repository**
-
-   ```sh
-   git clone <your-repo-url>
-   cd <your-repo>
-   ```
-
-2. **Set up your environment variables**
-
-   Create a `.env` file in your project root with your own values:
-
-   ```env
-   # Proxmox credentials
-   PM_API_URL=https://your-proxmox-host:8006/api2/json
-   PM_USER=root@pam
-   PM_PASS=your_proxmox_password
-
-   # DNS credentials
-   DNS_SERVER=192.168.0.254
-   KEY_ALGORITHM=hmac-sha512
-   KEY_NAME=your_TSIG. 
-   ZONE=example.com.
-   KEY_SECRET=your_dns_key_secret
-
-   # Cluster settings
-   CLUSTER_NAME=talos-cluster
-   ```
-
-   **Tip:** Never commit your `.env` file to version control if it contains secrets. Add `.env` to your `.gitignore`.
-
-3. **Export your environment variables**
-
-   ```sh
-   set -a
-   source .env
-   set +a
-   ```
-
-4. **Edit `main.tf` as needed**
-
-   - Adjust VM specs, counts, and module parameters to fit your environment.
-   - Update DNS and cluster settings as needed.
-
-5. **Initialize OpenTofu**
-
-   ```sh
-   tofu init
-   ```
-
-6. **Apply the configuration**
-
-   ```sh
-   tofu apply
-   ```
-
----
-
-## What Happens
-
-- **Proxmox VMs** for control plane and worker nodes are created.
-- **DNS records** are set for all nodes.
-- **Talos cluster** is bootstrapped and configured.
-- **Kubernetes manifests** and Helm charts are installed automatically (see `cluster-talos/cluster.tf` and `manifests/`).
-
----
-
-## Accessing Your Cluster
-
-After a successful apply, you will see an output similar to:
-
-```
-PlEASE FEEL FREE TO GET YOUR CLUSTER DETAILS BELOW:
-
-   Control plane IP: 192.168.0.100
-   Kubeconfig path: /absolute/path/to/clusters_configs/talos-cluster/kubeconfig
-   Talos configuration path: talos configuration is on clusters_configs/talos-cluster
-   Cluster name: talos
-   Worker IPs: 192.168.0.111,192.168.0.112,192.168.0.113
-   Control Plane IPs: 192.168.0.100
-
-To access your Kubernetes cluster, run:
-   export KUBECONFIG=/absolute/path/to/clusters_configs/talos-cluster/kubeconfig
-   kubectl get nodes
+module "cluster-talos" {
+  source               = "./cluster-talos"
+  name                 = "talos-cluster"
+  control_plane_port   = 6443
+  control_planes_ips   = module.talos-proxmox.control_plane_info[*].ip
+  worker_ips           = module.talos-proxmox.worker_info[*].ip
+  depends_on           = [module.talos-proxmox, module.dns]
+  tsig_secret          = var.dns_key_secret
+  tsig_keyname         = var.dns_key_name
+  cloudflare_api_token = var.cloudflare_api_token
+}
 ```
 
 ---
 
-## Customizing for Your Needs
+## 🔐 Required Variables
 
-- **VM specs:** Change CPU, memory, disk, and node counts in `main.tf`.
-- **DNS:** Update DNS server, zone, and key info in your `.env` and `main.tf`.
-- **Cluster name:** Change the `name` parameter in `main.tf` and `.env`.
-- **Manifests:** Place your custom Kubernetes YAML files in the `manifests/` directory to have them applied automatically.
-- **Helm charts:** Edit the `install_apps` resource in `cluster-talos/cluster.tf` to install or upgrade any Helm charts you need.
+Create a `.env` file with the following content (or export as `TF_VAR_` environment variables):
 
----
+### 📄 `.env` Example
 
-## Outputs
+```dotenv
+# Proxmox
+TF_VAR_proxmox_api_url=https://proxmox.local:8006
+TF_VAR_proxmox_user=root@pam
+TF_VAR_proxmox_password=your_password
+TF_VAR_proxmox_node=proxmox-node
+TF_VAR_vm_template=talos-template
 
-- **control_plane_info / worker_info:** Lists of node IPs from Proxmox.
-- **cluster_name:** The name of your cluster.
-- **worker_ips / control_plane_ips:** Lists of worker and control plane IPs.
-- **talos_k8s_details:** Full cluster access instructions and details.
+# DNS (RFC2136)
+TF_VAR_dns_server=192.168.0.254
+TF_VAR_dns_zone=orp-dev.eu.
+TF_VAR_dns_key_name=orp-dns.
+TF_VAR_dns_key_algorithm=hmac-sha512
+TF_VAR_dns_key_secret=your_base64_secret
 
----
+# Cluster configuration
+TF_VAR_cluster_name=talos-cluster
+TF_VAR_k8s_version=v1.30.0
 
-## Notes
+# Optional (Cloudflare DNS01 challenge for cert-manager)
+TF_VAR_cloudflare_api_token=your_cf_token
+```
 
-- Ensure your Proxmox and DNS credentials are set correctly.
-- The cluster will not be accessible until all Talos steps complete.
-- You may need to manually create the `clusters_configs/` directory before running `tofu apply`.
-- All resources are managed via OpenTofu—destroying the stack will remove all VMs and DNS records.
-- cert-manager you need to create your issuer and add your secrets 
+Load the file:
 
 ```bash
-#create the secret
-
-kubectl create secret generic cloudflare-api-token-secret \
-  --from-literal=api-token='CLOUDFLARE_API_TOKEN_HERE' -n cert-manager
-``` 
-
-- for external-dns create a tsig-secret as example:
-
-```bash
-kubectl create secret generic rfc2136-keys --from-literal=rfc2136-tsig-secret='<your secret>' --from-literal=rfc2136-tsig-keyname='k8s-external-dns-key' -n external-dns
+set -a
+source .env
+set +a
 ```
+
 ---
 
-## License
+## 🛠️ Usage
 
-MIT
+```bash
+tofu init
+tofu plan
+tofu apply -auto-approve
+```
+
+---
+
+## 🧪 Validate Cluster
+
+After apply:
+
+```bash
+export KUBECONFIG=./clusters_configs/talos-cluster/kubeconfig
+kubectl get nodes
+```
+
+---
