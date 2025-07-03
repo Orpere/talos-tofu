@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     dns = {
-      source  = "opentofu/dns"
+      source  = "hashicorp/dns"
       version = "3.4.3"
     }
   }
