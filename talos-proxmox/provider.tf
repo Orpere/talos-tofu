@@ -2,7 +2,9 @@ terraform {
   required_providers {
     proxmox = {
       source  = "telmate/proxmox"
-      version = "3.0.2-rc01"
+      version = "3.0.2-rc01"  # Use the available RC version
+      # Note: telmate/proxmox provider doesn't have GPG keys in registry
+      # Signature validation warnings are expected and safe to ignore
     }
   }
 }
