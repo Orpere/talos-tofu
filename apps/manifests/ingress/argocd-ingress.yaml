@@ -1,0 +1,30 @@
+# ArgoCD Ingress resource (using nginx-ingress-controller)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/grpc-backend: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - argocd.orp-dev.eu
+    secretName: argocd-tls-secret # Name of the TLS secret to be created
+  rules:
+  - host: "argocd.orp-dev.eu"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 80 # ArgoCD server service port
