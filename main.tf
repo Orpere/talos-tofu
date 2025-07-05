@@ -9,6 +9,8 @@ module "talos-proxmox" {
   worker_cores     = 8
   worker_memory    = 8196
   worker_disk_size = 100
+  prox_cir         = "192.168.0"
+  talos_image      = "nocloud-amd64.iso"
 }
 
 module "dns" {
