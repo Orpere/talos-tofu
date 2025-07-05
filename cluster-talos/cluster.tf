@@ -89,10 +89,18 @@ resource "null_resource" "talos_kubeconfig" {
       set -e
       export TALOSCONFIG=clusters_configs/${var.name}/talosconfig
       talosctl config endpoint ${var.control_planes_ips[0]}
-      command rm -fr clusters_configs/${var.name}/kubeconfig
-      talosctl kubeconfig  clusters_configs/${var.name}/.
-      mkdir -p ~/.talos
-      cp -f clusters_configs/${var.name}/talosconfig ~/.talos/config
+      rm -fr clusters_configs/${var.name}/kubeconfig
+      talosctl kubeconfig clusters_configs/${var.name}/.
+      
+      # Check if global talos config exists, if not create the directory and merge
+      if [ ! -f ~/.talos/config ]; then
+        echo "Global Talos config not found. Creating ~/.talos directory and merging config..."
+        mkdir -p ~/.talos
+        talosctl config merge clusters_configs/${var.name}/talosconfig
+      else
+        echo "Global Talos config exists. Merging current cluster config..."
+        talosctl config merge clusters_configs/${var.name}/talosconfig
+      fi
     EOT
   }
   depends_on = [null_resource.talos_bootstrap]
