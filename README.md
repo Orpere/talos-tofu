@@ -154,6 +154,238 @@ talosctl get members
 kubectl get pods -n argocd
 ```
 
+### ArgoCD CLI Commands
+
+After the cluster is deployed, you can use these useful ArgoCD CLI commands:
+
+#### Initial Setup and Login
+
+```bash
+# Get ArgoCD admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Port forward to access ArgoCD UI
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+# Login to ArgoCD CLI (use admin and the password from above)
+argocd login localhost:8080 --username admin --password <admin-password> --insecure
+```
+
+#### Application Management
+
+```bash
+# List all applications
+argocd app list
+
+# Get application details
+argocd app get <app-name>
+
+# Sync an application
+argocd app sync <app-name>
+
+# Create a new application
+argocd app create <app-name> \
+  --repo <git-repo-url> \
+  --path <path-to-manifests> \
+  --dest-server https://kubernetes.default.svc \
+  --dest-namespace <namespace>
+
+# Delete an application
+argocd app delete <app-name>
+```
+
+#### Configuration and Context
+
+```bash
+# View current ArgoCD config
+argocd config get-contexts
+
+# Switch ArgoCD context
+argocd context <context-name>
+
+# View cluster information
+argocd cluster list
+
+# Add a new cluster
+argocd cluster add <cluster-context-name>
+```
+
+#### Monitoring and Troubleshooting
+
+```bash
+# View application logs
+argocd app logs <app-name>
+
+# View application history
+argocd app history <app-name>
+
+# Rollback application
+argocd app rollback <app-name> <revision-id>
+
+# View application resources
+argocd app resources <app-name>
+
+# Refresh application (fetch latest from Git)
+argocd app refresh <app-name>
+```
+
+#### Repository Management
+
+```bash
+# List repositories
+argocd repo list
+
+# Add a repository
+argocd repo add <repo-url> --username <username> --password <password>
+
+# Remove a repository
+argocd repo rm <repo-url>
+```
+
+**ArgoCD UI Access:** `https://localhost:8080` (after port-forward)
+
+### Talos CLI Commands
+
+Useful Talos commands for cluster management and troubleshooting:
+
+#### Talos Configuration and Context
+
+```bash
+# Set Talos config (if not using environment variable)
+export TALOSCONFIG=./clusters_configs/<cluster_name>/talosconfig
+
+# View current Talos config
+talosctl config info
+
+# List available contexts
+talosctl config contexts
+
+# Switch context
+talosctl config context <context-name>
+
+# Set endpoint and node
+talosctl config endpoint <control-plane-ip>
+talosctl config node <node-ip>
+```
+
+#### Cluster Information
+
+```bash
+# Get cluster members
+talosctl get members
+
+# Check cluster health
+talosctl health
+
+# Get cluster info
+talosctl cluster show
+
+# View etcd members
+talosctl etcd members
+
+# Get Kubernetes version
+talosctl version
+```
+
+#### Node Management
+
+```bash
+# List all nodes
+talosctl get nodes
+
+# Get node details
+talosctl get node <node-name>
+
+# Reboot a node
+talosctl reboot --nodes <node-ip>
+
+# Shutdown a node
+talosctl shutdown --nodes <node-ip>
+
+# Upgrade Talos on nodes
+talosctl upgrade --nodes <node-ip> --image <talos-image>
+```
+
+#### System Information
+
+```bash
+# View system information
+talosctl get system-info
+
+# Check running services
+talosctl get services
+
+# View system logs
+talosctl logs
+
+# Follow logs for a specific service
+talosctl logs --follow <service-name>
+
+# Get disk usage
+talosctl get disks
+
+# View network interfaces
+talosctl get links
+```
+
+#### Kubernetes Integration
+
+```bash
+# Generate kubeconfig
+talosctl kubeconfig <output-directory>
+
+# Get kubeconfig and set KUBECONFIG
+talosctl kubeconfig ~/.kube/config
+
+# Bootstrap etcd cluster (only run once)
+talosctl bootstrap
+
+# Apply machine configuration
+talosctl apply-config --file <config-file> --nodes <node-ip>
+```
+
+#### Troubleshooting
+
+```bash
+# View all resources
+talosctl get all
+
+# Check network connectivity
+talosctl get routes
+talosctl get addresses
+
+# View container logs
+talosctl logs kubelet
+talosctl logs etcd
+
+# Interactive shell (if enabled)
+talosctl shell --nodes <node-ip>
+
+# Copy files to/from node
+talosctl cp <local-file> <node-ip>:<remote-path>
+talosctl cp <node-ip>:<remote-path> <local-file>
+```
+
+#### Configuration Files Locations
+
+**Talos Configuration:**
+
+- **Local project config:** `./clusters_configs/<cluster_name>/talosconfig`
+- **Global user config:** `~/.talos/config`
+- **Environment variable:** `$TALOSCONFIG`
+
+**Generated Files:**
+
+- **Control plane config:** `./clusters_configs/<cluster_name>/controlplane.yaml`
+- **Worker config:** `./clusters_configs/<cluster_name>/worker.yaml`
+- **Kubernetes config:** `./clusters_configs/<cluster_name>/kubeconfig`
+
+**Config Priority (highest to lowest):**
+
+1. `--talosconfig` CLI flag
+2. `$TALOSCONFIG` environment variable
+3. `~/.talos/config`
+
 ---
 
 ## 📁 Project Structure
