@@ -9,8 +9,6 @@ resource "null_resource" "talos_config" {
       if [ ! -f "$CONFIG_FILE" ]; then
         echo "Talos config file not found at $CONFIG_FILE. Generating..."
         talosctl gen config ${var.name} https://${var.control_planes_ips[0]}:${var.control_plane_port} --output-dir clusters_configs/${var.name}
-        mkdir -p ~/.talos
-        cp -f clusters_configs/${var.name}/talosconfig ~/.talos/config
       else
         echo "Talos config file already exists. Skipping generation."
       fi
@@ -93,6 +91,8 @@ resource "null_resource" "talos_kubeconfig" {
       talosctl config endpoint ${var.control_planes_ips[0]}
       command rm -fr clusters_configs/${var.name}/kubeconfig
       talosctl kubeconfig  clusters_configs/${var.name}/.
+      mkdir -p ~/.talos
+      cp -f clusters_configs/${var.name}/talosconfig ~/.talos/config
     EOT
   }
   depends_on = [null_resource.talos_bootstrap]
