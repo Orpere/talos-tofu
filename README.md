@@ -20,6 +20,15 @@ This configuration deploys:
 - DNS records for all nodes
 - Kubernetes cluster with essential add-ons
 
+### 📊 Architecture Diagrams
+
+For detailed architecture visualization and component relationships, see:
+
+- **[📋 Architecture Overview](./ARCHITECTURE.md)** - Complete architecture documentation with setup guide
+- **[🎯 C4 Diagrams](./architecture-c4-diagram.md)** - Interactive Mermaid diagrams showing system context, containers, and components
+
+**💡 Quick View:** Open the diagram files in VS Code and press `Ctrl+Shift+V` (Windows/Linux) or `Cmd+Shift+V` (macOS) to see interactive diagrams with automatic rendering.
+
 ### `main.tf` Overview
 
 ```hcl
