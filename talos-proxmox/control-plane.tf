@@ -2,15 +2,31 @@ resource "proxmox_vm_qemu" "control-plane" {
   count       = var.cp_count
   name        = "cp-${var.name}${count.index}"
   target_node = "pve"
-  memory      = var.cp_memory
-  agent       = 1
-  bios        = "seabios"
-  boot        = "order=scsi0;ide2;net0"
-  hotplug     = "network,disk,usb"
-  qemu_os     = "l26"
-  scsihw      = "virtio-scsi-single"
-  vm_state    = "running"
-  skip_ipv6   = true
+  # Lifecycle configuration
+  lifecycle {
+    # Prevent accidental destruction of VMs
+    prevent_destroy = true
+
+    # Ignore changes to these attributes to avoid unnecessary updates
+    ignore_changes = [
+      ciuser,
+      sshkeys,
+      disk,
+      network
+    ]
+
+    # Create new VM before destroying old one (useful for updates)
+    # create_before_destroy = true
+  }
+  memory    = var.cp_memory
+  agent     = 1
+  bios      = "seabios"
+  boot      = "order=scsi0;ide2;net0"
+  hotplug   = "network,disk,usb"
+  qemu_os   = "l26"
+  scsihw    = "virtio-scsi-single"
+  vm_state  = "running"
+  skip_ipv6 = true
 
   # Cloud-init configuration
   ciupgrade    = true

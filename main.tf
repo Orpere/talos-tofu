@@ -7,7 +7,7 @@ module "talos-proxmox" {
   cp_disk_size     = 80
   worker_count     = 3
   worker_cores     = 8
-  worker_memory    = 8196
+  worker_memory    = 9216
   worker_disk_size = 100
   prox_cir         = "192.168.0"
   talos_image      = "nocloud-amd64.iso"
