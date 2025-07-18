@@ -7,6 +7,8 @@ repositories:
     url: https://charts.bitnami.com/bitnami
   - name: external-dns
     url: https://kubernetes-sigs.github.io/external-dns/
+  - name: external-secrets
+    url: https://charts.external-secrets.io  
 
 releases:
   - name: nginx-ingress
@@ -32,3 +34,11 @@ releases:
     createNamespace: true
     values:
       - values/external-dns.yaml
+  
+  - name: external-secrets
+    namespace: external-secrets
+    chart: external-secrets/external-secrets
+    version: v0.18.2
+    createNamespace: true
+    values:
+      - values/external-secrets.yaml  

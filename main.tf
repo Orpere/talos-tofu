@@ -1,7 +1,7 @@
 module "talos-proxmox" {
   source           = "./talos-proxmox"
   name             = "talos"
-  cp_count         = 3
+  cp_count         = 1
   cp_cores         = 8
   cp_memory        = 8196
   cp_disk_size     = 80

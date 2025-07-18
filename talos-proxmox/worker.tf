@@ -7,7 +7,7 @@ resource "proxmox_vm_qemu" "worker" {
   # Lifecycle configuration
   lifecycle {
     # Prevent accidental destruction of VMs
-    prevent_destroy = true
+    prevent_destroy = false
 
     # Ignore changes to these attributes to avoid unnecessary updates
     ignore_changes = [
