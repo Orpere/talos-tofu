@@ -2,14 +2,40 @@
 
 This project automates the deployment of a Talos Kubernetes cluster on Proxmox VE using Terraform/OpenTofu. It includes automated DNS management via RFC2136 and optional Cloudflare integration for Let's Encrypt certificates.
 
+## 🆕 What's New
+
+### Recent Updates & Features
+
+- **🔐 External Secrets Operator**: Added comprehensive secrets management with support for multiple backends (AWS, Azure, GCP, HashiCorp Vault, etc.)
+- **📊 Interactive Architecture Diagrams**: Complete C4 model diagrams with Mermaid that render automatically in VS Code
+- **📖 Enhanced Documentation**:
+  - Detailed architecture documentation (`ARCHITECTURE.md`)
+  - Interactive C4 diagrams (`architecture-c4-diagram.md`)
+  - Comprehensive CLI command guides for Talos and ArgoCD
+- **🔧 Improved Helm Management**: Helmfile-based deployment for consistent application management
+- **🧪 Test Environment**: Added test manifests for SSL/non-SSL configurations and sample applications
+- **⚙️ Automation Scripts**: Proxmox template creator script for streamlined setup
+- **🔄 Lifecycle Management**: Enhanced cluster lifecycle management and configuration handling
+- **📝 Template Improvements**: Dynamic placeholders for easier customization
+
+### Latest Integrations
+
+- **External Secrets v0.18.2**: Advanced secret synchronization and management
+- **Cert-Manager v1.18.0**: Latest certificate automation and management
+- **Nginx Ingress v4.10.1**: Updated ingress controller with latest features
+- **External DNS v1.16.1**: Enhanced DNS automation and provider support
+
 ## 📋 Features
 
 - **Automated Talos cluster deployment** on Proxmox VE
 - **DNS management** via RFC2136 (TSIG)
 - **ArgoCD integration** for GitOps
 - **Cert-manager** with Cloudflare DNS01 challenge support
+- **External Secrets Operator** for secure secrets management
+- **External DNS** for automatic DNS record management
 - **MetalLB** for load balancing
 - **Nginx Ingress Controller**
+- **Comprehensive documentation** with interactive C4 diagrams
 
 ## 🔧 Architecture
 
