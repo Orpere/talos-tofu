@@ -8,7 +8,11 @@ repositories:
   - name: external-dns
     url: https://kubernetes-sigs.github.io/external-dns/
   - name: external-secrets
-    url: https://charts.external-secrets.io  
+    url: https://charts.external-secrets.io
+  - name: openbao
+    url: https://openbao.github.io/openbao-helm
+  - name: csi-driver-nfs
+    url: https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
 
 releases:
   - name: nginx-ingress
@@ -34,7 +38,13 @@ releases:
     createNamespace: true
     values:
       - values/external-dns.yaml
+
+  - name: csi-driver-nfs
+    namespace: kube-system
+    chart: csi-driver-nfs/csi-driver-nfs
+    version: v4.11.0
   
+
   - name: external-secrets
     namespace: external-secrets
     chart: external-secrets/external-secrets
@@ -42,3 +52,11 @@ releases:
     createNamespace: true
     values:
       - values/external-secrets.yaml  
+
+  - name: openbao
+    namespace: openbao
+    chart: openbao/openbao
+    version: 0.16.2
+    createNamespace: true
+    values:
+      - values/openbao-values.yaml

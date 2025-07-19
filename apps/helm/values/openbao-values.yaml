@@ -1,0 +1,738 @@
+# OpenBao Helm Chart Values
+# Production-ready configuration for Talos Kubernetes cluster
+# 
+# Features enabled:
+# - High Availability (3 replicas)
+# - Raft integrated storage
+# - Ingress with Let's Encrypt TLS
+# - Agent injection for secrets
+# - Pod anti-affinity for resilience
+#
+# Access: https://openbao.orp-dev.eu
+
+global:
+  enabled: true
+  namespace: "openbao"
+  # TLS is terminated at the ingress level
+  tlsDisable: true
+  # External HTTPS access via ingress (comment out to deploy server in cluster)
+  # externalBaoAddr: "https://openbao.orp-dev.eu"
+
+  # Disable PodSecurityPolicy (deprecated in Kubernetes 1.25+)
+  psp:
+    enable: false
+
+  # Prometheus integration (disabled for now)
+  serverTelemetry:
+    prometheusOperator: false
+
+injector:
+  # Enable OpenBao agent injection
+  enabled: "-"
+  replicas: 1
+  
+  # Configures the port the injector should listen on
+  port: 8080
+  
+  # If multiple replicas are specified, by default a leader will be determined
+  # so that only one injector attempts to create TLS certificates
+  leaderElector:
+    enabled: true
+    
+  # If true, will enable a node exporter metrics endpoint at /metrics
+  metrics:
+    enabled: false
+  
+  # Deprecated: Please use global.externalBaoAddr instead
+  externalVaultAddr: ""
+
+  # image sets the repo and tag of the vault-k8s image to use for the injector
+  image:
+    # image registry to use for k8s image
+    registry: "docker.io"
+    # image repo to use for k8s image
+    repository: "hashicorp/vault-k8s"
+    # image tag to use for k8s image
+    tag: "1.4.2"
+    # image pull policy to use for k8s image
+    pullPolicy: IfNotPresent
+
+  # agentImage sets the repo and tag of the OpenBao image to use for the OpenBao Agent containers
+  # This should be set to the official OpenBao image. OpenBao 1.3.1+ is required
+  agentImage:
+    # image registry to use for agent image
+    registry: "quay.io"
+    # image repo to use for agent image
+    repository: "openbao/openbao"
+    # image tag to use for agent image
+    tag: "2.3.1"
+    # image pull policy to use for agent image
+    pullPolicy: IfNotPresent
+
+  # The default values for the injected OpenBao Agent containers
+  agentDefaults:
+    cpuLimit: "500m"
+    cpuRequest: "250m"
+    memLimit: "128Mi"
+    memRequest: "64Mi"
+    # Default template type for secrets when no custom template is specified
+    template: "map"
+    # Default values within Agent's template_config stanza
+    templateConfig:
+      exitOnRetryFailure: true
+      staticSecretRenderInterval: ""
+
+  # Mount Path of the OpenBao Kubernetes Auth Method
+  authPath: "auth/kubernetes"
+  
+  # Configures the log verbosity of the injector
+  logLevel: "info"
+  
+  # Configures the log format of the injector
+  logFormat: "standard"
+  
+  # Configures all OpenBao Agent sidecars to revoke their token when shutting down
+  revokeOnShutdown: false
+
+  # Webhook configuration
+  webhook:
+    # Configures failurePolicy of the webhook
+    failurePolicy: Ignore
+    # matchPolicy specifies the approach to accepting changes based on the rules
+    matchPolicy: Exact
+    # timeoutSeconds is the amount of seconds before the webhook request will be ignored
+    timeoutSeconds: 30
+    # namespaceSelector is the selector for restricting the webhook to only specific namespaces
+    namespaceSelector: {}
+    # objectSelector is the selector for restricting the webhook to only specific labels
+    objectSelector: |
+      matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: NotIn
+        values:
+        - {{ template "openbao.name" . }}-agent-injector
+    # Extra annotations to attach to the webhook
+    annotations: {}
+
+  # Deprecated fields - please use 'webhook.*' instead
+  failurePolicy: Ignore
+  namespaceSelector: {}
+  objectSelector: {}
+  webhookAnnotations: {}
+
+  # TLS certificate configuration for webhook
+  certs:
+    # secretName is the name of the secret that has the TLS certificate and private key
+    secretName: null
+    # caBundle is a base64-encoded PEM-encoded certificate bundle for the CA
+    caBundle: ""
+    # certName and keyName are the names of the files within the secret
+    certName: tls.crt
+    keyName: tls.key
+
+  # Security context for the pod template and the injector container
+  securityContext:
+    pod: {}
+    container: {}
+
+  # Resource allocation for injector
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+  # extraEnvironmentVars is a list of extra environment variables to set in the injector deployment
+  extraEnvironmentVars: {}
+
+  # Affinity Settings for injector pods
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ template "openbao.name" . }}-agent-injector
+              app.kubernetes.io/instance: "{{ .Release.Name }}"
+              component: webhook
+          topologyKey: kubernetes.io/hostname
+
+  # Topology settings for injector pods
+  topologySpreadConstraints: []
+
+  # Toleration Settings for injector pods
+  tolerations: []
+
+  # nodeSelector labels for server pod assignment
+  nodeSelector: {}
+
+  # Priority class for injector pods
+  priorityClassName: ""
+
+  # Extra annotations to attach to the injector pods
+  annotations: {}
+
+  # Extra labels to attach to the agent-injector
+  extraLabels: {}
+
+  # Should the injector pods run on the host network
+  hostNetwork: false
+
+  # Injector service specific config
+  service:
+    # Extra annotations to attach to the injector service
+    annotations: {}
+
+  # Injector serviceAccount specific config
+  serviceAccount:
+    # Extra annotations to attach to the injector serviceAccount
+    annotations: {}
+
+  # A disruption budget limits the number of pods of a replicated application
+  podDisruptionBudget: {}
+
+  # strategy for updating the deployment
+  strategy: {}
+
+server:
+  # OpenBao server configuration - explicitly enable for in-cluster deployment
+  enabled: true
+  
+  # Container image configuration  
+  image:
+    # image registry to use for server image
+    registry: "quay.io"
+    # image repo to use for server image
+    repository: "openbao/openbao"
+    # image tag to use for server image
+    tag: "2.3.1"
+    # image pull policy to use for server image
+    pullPolicy: IfNotPresent
+
+  # Configure the Update Strategy Type for the StatefulSet
+  updateStrategyType: "OnDelete"
+
+  # Configure the logging verbosity for the OpenBao server
+  logLevel: ""
+
+  # Configure the logging format for the OpenBao server
+  logFormat: ""
+
+  # Resource requests, limits, etc. for the server cluster placement
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+
+  # Ingress allows ingress services to be created to allow external access from Kubernetes to access OpenBao pods
+  ingress:
+    enabled: true
+    labels: {}
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Optionally use ingressClassName instead of deprecated annotation
+    ingressClassName: "nginx"
+    # As of Kubernetes 1.19, all Ingress Paths must have a pathType configured
+    pathType: Prefix
+    # When HA mode is enabled and K8s service registration is being used, configure the ingress to point to the OpenBao active service
+    activeService: true
+    hosts:
+      - host: openbao.orp-dev.eu
+        paths: ["/"]
+    ## Extra paths to prepend to the host configuration
+    extraPaths: []
+    tls:
+      - secretName: openbao-tls
+        hosts:
+          - openbao.orp-dev.eu
+
+  # hostAliases is a list of aliases to be added to /etc/hosts
+  hostAliases: []
+
+  # OpenShift route (disabled - using ingress instead)
+  route:
+    enabled: false
+
+  # Kubernetes auth delegation
+  authDelegator:
+    enabled: true
+
+  # extraInitContainers is a list of init containers
+  extraInitContainers: []
+
+  # extraContainers is a list of sidecar containers
+  extraContainers: null
+
+  # shareProcessNamespace enables process namespace sharing between OpenBao and the extraContainers
+  shareProcessNamespace: false
+
+  # extraArgs is a string containing additional OpenBao server arguments
+  extraArgs: ""
+
+  # extraPorts is a list of extra ports
+  extraPorts: []
+
+  # Used to define custom readinessProbe settings
+  readinessProbe:
+    enabled: true
+    # If you need to use a http path instead of the default exec
+    # path: /v1/sys/health?standbyok=true
+    # Port number on which readinessProbe will be checked
+    port: 8200
+    # When a probe fails, Kubernetes will try failureThreshold times before giving up
+    failureThreshold: 2
+    # Number of seconds after the container has started before probe initiates
+    initialDelaySeconds: 5
+    # How often (in seconds) to perform the probe
+    periodSeconds: 5
+    # Minimum consecutive successes for the probe to be considered successful after having failed
+    successThreshold: 1
+    # Number of seconds after which the probe times out
+    timeoutSeconds: 3
+    
+  # Used to enable a livenessProbe for the pods
+  livenessProbe:
+    enabled: false
+    # Used to define a liveness exec command
+    execCommand: []
+    # Path for the livenessProbe to use httpGet as the livenessProbe handler
+    path: "/v1/sys/health?standbyok=true"
+    # Port number on which livenessProbe will be checked
+    port: 8200
+    # When a probe fails, Kubernetes will try failureThreshold times before giving up
+    failureThreshold: 2
+    # Number of seconds after the container has started before probe initiates
+    initialDelaySeconds: 60
+    # How often (in seconds) to perform the probe
+    periodSeconds: 5
+    # Minimum consecutive successes for the probe to be considered successful after having failed
+    successThreshold: 1
+    # Number of seconds after which the probe times out
+    timeoutSeconds: 3
+
+  # Optional duration in seconds the pod needs to terminate gracefully
+  terminationGracePeriodSeconds: 10
+
+  # Used to set the sleep time during the preStop step
+  preStopSleepSeconds: 5
+
+  # Used to define commands to run after the pod is ready
+  postStart: []
+
+  # extraEnvironmentVars is a list of extra environment variables to set with the stateful set
+  extraEnvironmentVars: {}
+
+  # extraSecretEnvironmentVars is a list of extra environment variables to set with the stateful set
+  extraSecretEnvironmentVars: []
+
+  # Deprecated: please use 'volumes' instead
+  extraVolumes: []
+
+  # volumes is a list of volumes made available to all containers
+  volumes: null
+
+  # volumeMounts is a list of volumeMounts for the main server container
+  volumeMounts: null
+
+  # Affinity Settings
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ template "openbao.name" . }}
+              app.kubernetes.io/instance: "{{ .Release.Name }}"
+              component: server
+          topologyKey: kubernetes.io/hostname
+
+  # Topology settings for server pods
+  topologySpreadConstraints: []
+          
+  # Toleration Settings for server pods
+  tolerations: []
+
+  # nodeSelector labels for server pod assignment
+  nodeSelector: {}
+
+  # Priority class for server pods
+  priorityClassName: ""
+
+  # Extra labels to attach to the server pods
+  extraLabels: {}
+
+  # Extra annotations to attach to the server pods
+  annotations: {}
+
+  # Add an annotation to the server configmap and the statefulset pods
+  configAnnotation: false
+
+  # Enables network policy for server pods
+  networkPolicy:
+    enabled: false
+    egress: []
+    ingress:
+      - from:
+          - namespaceSelector: {}
+        ports:
+          - port: 8200
+            protocol: TCP
+          - port: 8201
+            protocol: TCP
+
+  # Enables a headless service to be used by the OpenBao Statefulset
+  service:
+    enabled: true
+    # Enable or disable the openbao-active service, which selects OpenBao pods that have labeled themselves as the cluster leader
+    active:
+      enabled: true
+      # Extra annotations for the service definition
+      annotations: {}
+    # Enable or disable the openbao-standby service, which selects OpenBao pods that have labeled themselves as a cluster follower
+    standby:
+      enabled: true
+      # Extra annotations for the service definition
+      annotations: {}
+    # If enabled, the service selectors will include `app.kubernetes.io/instance: {{ .Release.Name }}`
+    instanceSelector:
+      enabled: true
+    # clusterIP controls whether a Cluster IP address is attached to the OpenBao service within Kubernetes
+    # clusterIP: None
+    # Configures the service type for the main OpenBao service
+    # type: ClusterIP
+    # The IP family and IP families options are to set the behaviour in a dual-stack environment
+    ipFamilyPolicy: ""
+    # Sets the families that should be supported and the order in which they should be applied to ClusterIP
+    ipFamilies: []
+    # Do not wait for pods to be ready before including them in the services' targets
+    publishNotReadyAddresses: true
+    # The externalTrafficPolicy can be set to either Cluster or Local
+    externalTrafficPolicy: Cluster
+    # Port on which OpenBao server is listening
+    port: 8200
+    # Target port to which the service should be mapped to
+    targetPort: 8200
+    # Extra annotations for the service definition
+    annotations: {}
+
+  # This configures the OpenBao Statefulset to create a PVC for data storage when using the file or raft backend storage engines
+  dataStorage:
+    enabled: true
+    # Size of the PVC created
+    size: 10Gi
+    # Location where the PVC will be mounted
+    mountPath: "/openbao/data"
+    # Name of the storage class to use. If null it will use the configured default Storage Class
+    storageClass: null
+    # Access Mode of the storage device being used for the PVC
+    accessMode: ReadWriteOnce
+    # Annotations to apply to the PVC
+    annotations: {}
+    # Labels to apply to the PVC
+    labels: {}
+
+  # Persistent Volume Claim (PVC) retention policy
+  persistentVolumeClaimRetentionPolicy: {}
+
+  # This configures the OpenBao Statefulset to create a PVC for audit logs
+  auditStorage:
+    enabled: false
+    # Size of the PVC created
+    size: 10Gi
+    # Location where the PVC will be mounted
+    mountPath: "/openbao/audit"
+    # Name of the storage class to use. If null it will use the configured default Storage Class
+    storageClass: null
+    # Access Mode of the storage device being used for the PVC
+    accessMode: ReadWriteOnce
+    # Annotations to apply to the PVC
+    annotations: {}
+    # Labels to apply to the PVC
+    labels: {}
+
+  # Run OpenBao in "dev" mode
+  dev:
+    enabled: false
+    # Set VAULT_DEV_ROOT_TOKEN_ID value
+    devRootToken: "root"
+
+  # Run OpenBao in "standalone" mode
+  standalone:
+    enabled: "-"
+    # config is a raw string of default configuration when using a Stateful deployment
+    config: |
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "file" {
+        path = "/openbao/data"
+      }
+
+  # Run OpenBao in "HA" mode
+  ha:
+    enabled: true
+    replicas: 3
+    # Set the api_addr configuration for OpenBao HA
+    apiAddr: null
+    # Set the cluster_addr confuguration for OpenBao HA
+    clusterAddr: null
+    
+    # Enables OpenBao's integrated Raft storage
+    raft:
+      # Enables Raft integrated storage
+      enabled: true
+      # Set the Node Raft ID to the name of the pod
+      setNodeId: true
+      # Raft configuration
+      config: |
+        ui = true
+        listener "tcp" {
+          tls_disable = 1
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+        }
+        storage "raft" {
+          path = "/openbao/data"
+        }
+        service_registration "kubernetes" {}
+
+    # config is a raw string of default configuration when using a Stateful deployment
+    config: |
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "consul" {
+        path = "openbao"
+        address = "HOST_IP:8500"
+      }
+
+      service_registration "kubernetes" {}
+        
+    # A disruption budget limits the number of pods of a replicated application
+    disruptionBudget:
+      enabled: true
+      # maxUnavailable will default to (n/2)-1 where n is the number of replicas
+      maxUnavailable: null
+
+  # Definition of the serviceAccount used to run OpenBao
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use
+    name: ""
+    # Create a Secret API object to store a non-expiring token for the service account
+    createSecret: false
+    # Extra annotations for the serviceAccount definition
+    annotations: {}
+    # Extra labels to attach to the serviceAccount
+    extraLabels: {}
+    # Enable or disable a service account role binding with the permissions required for OpenBao's Kubernetes service_registration config option
+    serviceDiscovery:
+      enabled: true
+
+  # Settings for the statefulSet used to run OpenBao
+  statefulSet:
+    # Extra annotations for the statefulSet
+    annotations: {}
+    # Set the pod and container security contexts
+    securityContext:
+      pod: {}
+      container: {}
+
+  # Should the server pods run on the host network
+  hostNetwork: false
+
+# OpenBao UI
+ui:
+  # True if you want to create a Service entry for the OpenBao UI
+  enabled: true
+  # Do not wait for pods to be ready before including them in the services' targets
+  publishNotReadyAddresses: true
+  # The service should only contain selectors for active OpenBao pod
+  activeOpenbaoPodOnly: false
+  # serviceType can be used to control the type of service created
+  serviceType: "ClusterIP"
+  # If type is set to "NodePort", a specific nodePort value can be configured
+  serviceNodePort: null
+  # Port for the UI service
+  externalPort: 8200
+  # Target port for the UI service
+  targetPort: 8200
+  # The IP family and IP families options are to set the behaviour in a dual-stack environment
+  serviceIPFamilyPolicy: ""
+  # Sets the families that should be supported and the order in which they should be applied to ClusterIP
+  serviceIPFamilies: []
+  # The externalTrafficPolicy can be set to either Cluster or Local
+  externalTrafficPolicy: Cluster
+  # loadBalancerSourceRanges:
+  #   - 10.0.0.0/16
+  # loadBalancerIP:
+  # Extra annotations to attach to the ui service
+  annotations: {}
+
+# secrets-store-csi-driver-provider-vault
+csi:
+  # True if you want to install a secrets-store-csi-driver-provider-vault daemonset
+  enabled: false
+
+  image:
+    # image registry to use for csi image
+    registry: "quay.io"
+    # image repo to use for csi image
+    repository: "openbao/openbao-csi-provider"
+    # image tag to use for csi image
+    tag: "1.5.0"
+    # image pull policy to use for csi image
+    pullPolicy: IfNotPresent
+
+  # volumes is a list of volumes made available to all containers
+  volumes: []
+
+  # volumeMounts is a list of volumeMounts for the main server container
+  volumeMounts: []
+
+  resources: {}
+
+  # Override the default secret name for the CSI Provider's HMAC key used for generating secret versions
+  hmacSecretName: ""
+
+  # Settings for the daemonSet used to run the provider
+  daemonSet:
+    updateStrategy:
+      type: RollingUpdate
+      maxUnavailable: ""
+    # Extra annotations for the daemonSet
+    annotations: {}
+    # Provider host path (must match the CSI provider's path)
+    providersDir: "/etc/kubernetes/secrets-store-csi-providers"
+    # Kubelet host path
+    kubeletRootDir: "/var/lib/kubelet"
+    # Extra labels to attach to the vault-csi-provider daemonSet
+    extraLabels: {}
+    # security context for the pod template and container in the csi provider daemonSet
+    securityContext:
+      pod: {}
+      container: {}
+
+  pod:
+    # Extra annotations for the provider pods
+    annotations: {}
+    # Toleration Settings for provider pods
+    tolerations: []
+    # nodeSelector labels for csi pod assignment
+    nodeSelector: {}
+    # Affinity Settings
+    affinity: {}
+    # Extra labels to attach to the vault-csi-provider pod
+    extraLabels: {}
+
+  agent:
+    enabled: true
+    extraArgs: []
+    image:
+      # image registry to use for agent image
+      registry: "quay.io"
+      # image repo to use for agent image
+      repository: "openbao/openbao"
+      # image tag to use for agent image
+      tag: "2.3.1"
+      # image pull policy to use for agent image
+      pullPolicy: IfNotPresent
+    logFormat: standard
+    logLevel: info
+    resources: {}
+
+  # Priority class for csi pods
+  priorityClassName: ""
+
+  serviceAccount:
+    # Extra annotations for the serviceAccount definition
+    annotations: {}
+    # Extra labels to attach to the vault-csi-provider serviceAccount
+    extraLabels: {}
+
+  # Used to configure readinessProbe for the pods
+  readinessProbe:
+    # When a probe fails, Kubernetes will try failureThreshold times before giving up
+    failureThreshold: 2
+    # Number of seconds after the container has started before probe initiates
+    initialDelaySeconds: 5
+    # How often (in seconds) to perform the probe
+    periodSeconds: 5
+    # Minimum consecutive successes for the probe to be considered successful after having failed
+    successThreshold: 1
+    # Number of seconds after which the probe times out
+    timeoutSeconds: 3
+
+  # Used to configure livenessProbe for the pods
+  livenessProbe:
+    # When a probe fails, Kubernetes will try failureThreshold times before giving up
+    failureThreshold: 2
+    # Number of seconds after the container has started before probe initiates
+    initialDelaySeconds: 5
+    # How often (in seconds) to perform the probe
+    periodSeconds: 5
+    # Minimum consecutive successes for the probe to be considered successful after having failed
+    successThreshold: 1
+    # Number of seconds after which the probe times out
+    timeoutSeconds: 3
+
+  # Enables debug logging
+  debug: false
+
+  # Pass arbitrary additional arguments to vault-csi-provider
+  extraArgs: []
+
+# OpenBao is able to collect and publish various runtime metrics
+# Enabling this feature requires setting adding `telemetry{}` stanza to the OpenBao configuration
+serverTelemetry:
+  # Enable support for the Prometheus Operator
+  serviceMonitor:
+    # Enable deployment of the OpenBao Server ServiceMonitor CustomResource
+    enabled: false
+    # Selector labels to add to the ServiceMonitor
+    selectors: {}
+    # Interval at which Prometheus scrapes metrics
+    interval: 30s
+    # Timeout for Prometheus scrapes
+    scrapeTimeout: 10s
+    # tlsConfig used for scraping the Vault metrics API
+    tlsConfig: {}
+    # authorization used for scraping the Vault metrics API
+    authorization: {}
+    # scrapeClass to be used by the serviceMonitor
+    scrapeClass: ""
+
+  # Configuration for monitoring the OpenBao server
+  prometheusRules:
+    # Deploy the PrometheusRule custom resource for AlertManager based alerts
+    enabled: false
+    # Selector labels to add to the PrometheusRules
+    selectors: {}
+    # Some example rules
+    rules: []
+
+  # Enable deployment of the OpenBao Grafana dashboard
+  grafanaDashboard:
+    enabled: false
+    # Add `grafana_dashboard: "1"` default label
+    defaultLabel: true
+    # Extra labels for dashboard ConfigMap
+    extraLabel: {}
+    # Extra annotations for dashboard ConfigMap
+    extraAnnotations: {}
+

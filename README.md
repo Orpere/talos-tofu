@@ -7,6 +7,7 @@ This project automates the deployment of a Talos Kubernetes cluster on Proxmox V
 ### Recent Updates & Features
 
 - **🔐 External Secrets Operator**: Added comprehensive secrets management with support for multiple backends (AWS, Azure, GCP, HashiCorp Vault, etc.)
+- **🏦 OpenBao Integration**: HashiCorp Vault fork with HA Raft storage, ingress configuration, and production-ready setup
 - **📊 Interactive Architecture Diagrams**: Complete C4 model diagrams with Mermaid that render automatically in VS Code
 - **📖 Enhanced Documentation**:
   - Detailed architecture documentation (`ARCHITECTURE.md`)
@@ -20,6 +21,7 @@ This project automates the deployment of a Talos Kubernetes cluster on Proxmox V
 
 ### Latest Integrations
 
+- **OpenBao v2.3.1**: Production-ready HashiCorp Vault fork with HA Raft storage
 - **External Secrets v0.18.2**: Advanced secret synchronization and management
 - **Cert-Manager v1.18.0**: Latest certificate automation and management
 - **Nginx Ingress v4.10.1**: Updated ingress controller with latest features
@@ -32,6 +34,7 @@ This project automates the deployment of a Talos Kubernetes cluster on Proxmox V
 - **ArgoCD integration** for GitOps
 - **Cert-manager** with Cloudflare DNS01 challenge support
 - **External Secrets Operator** for secure secrets management
+- **OpenBao** (HashiCorp Vault fork) for secrets management and PKI
 - **External DNS** for automatic DNS record management
 - **MetalLB** for load balancing
 - **Nginx Ingress Controller**

@@ -17,7 +17,7 @@ module "dns" {
   source        = "./tofu-dns"
   dns_server    = "192.168.0.254"
   key_algorithm = "hmac-sha512"
-  key_name      = "orp-dns."
+  key_name      = "orp-dns." # <-- trailing dot is correct
   zone          = "orp-dev.eu." # <-- trailing dot is correct
   key_secret    = var.key_secret
   records = merge(
