@@ -1,0 +1,278 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openbao-init-unseal
+  namespace: openbao
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: openbao-init-unseal
+    spec:
+      serviceAccountName: openbao-init
+      restartPolicy: OnFailure
+      containers:
+      - name: openbao-init
+        image: python:3.11-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          
+          # Install required packages
+          pip install kubernetes requests
+          
+          # Create Python script for initialization
+          cat > /tmp/init_openbao.py << 'EOF'
+          import os
+          import time
+          import json
+          import requests
+          import base64
+          from kubernetes import client, config
+          
+          # Load in-cluster config
+          config.load_incluster_config()
+          v1 = client.CoreV1Api()
+          
+          def wait_for_pods():
+              print("Waiting for OpenBao pods to be ready...")
+              while True:
+                  try:
+                      pods = v1.list_namespaced_pod(
+                          namespace='openbao',
+                          label_selector='app.kubernetes.io/name=openbao,component=server'
+                      )
+                      if pods.items and pods.items[0].status.phase == 'Running':
+                          print("OpenBao pods are ready")
+                          break
+                  except Exception as e:
+                      print(f"Error checking pods: {e}")
+                  time.sleep(10)
+          
+          def check_initialization():
+              try:
+                  response = requests.get('http://openbao-0.openbao-internal:8200/v1/sys/init')
+                  if response.status_code == 200:
+                      return response.json().get('initialized', False)
+              except:
+                  pass
+              return False
+          
+          def initialize_openbao():
+              print("Initializing OpenBao...")
+              payload = {
+                  'secret_shares': 5,
+                  'secret_threshold': 3
+              }
+              response = requests.post(
+                  'http://openbao-0.openbao-internal:8200/v1/sys/init',
+                  json=payload
+              )
+              if response.status_code == 200:
+                  return response.json()
+              else:
+                  raise Exception(f"Failed to initialize: {response.text}")
+          
+          def store_keys(init_data):
+              print("Storing keys in Kubernetes secret...")
+              secret_data = {
+                  'root_token': base64.b64encode(init_data['root_token'].encode()).decode(),
+                  'unseal_key_0': base64.b64encode(init_data['keys_base64'][0].encode()).decode(),
+                  'unseal_key_1': base64.b64encode(init_data['keys_base64'][1].encode()).decode(),
+                  'unseal_key_2': base64.b64encode(init_data['keys_base64'][2].encode()).decode(),
+                  'unseal_key_3': base64.b64encode(init_data['keys_base64'][3].encode()).decode(),
+                  'unseal_key_4': base64.b64encode(init_data['keys_base64'][4].encode()).decode(),
+              }
+              
+              secret = client.V1Secret(
+                  metadata=client.V1ObjectMeta(name='openbao-init-keys', namespace='openbao'),
+                  data=secret_data
+              )
+              
+              try:
+                  v1.create_namespaced_secret(namespace='openbao', body=secret)
+              except client.exceptions.ApiException as e:
+                  if e.status == 409:  # Already exists
+                      v1.replace_namespaced_secret(name='openbao-init-keys', namespace='openbao', body=secret)
+                  else:
+                      raise
+          
+          def join_raft_cluster(pod_name):
+              """Join a pod to the Raft cluster"""
+              if pod_name == 'openbao-0':
+                  return True  # Leader doesn't need to join
+              
+              print(f"Joining {pod_name} to Raft cluster...")
+              try:
+                  response = requests.post(
+                      f'http://{pod_name}.openbao-internal:8200/v1/sys/storage/raft/join',
+                      json={
+                          'leader_api_addr': 'http://openbao-0.openbao-internal:8200',
+                          'retry': True
+                      }
+                  )
+                  if response.status_code == 200:
+                      print(f"Successfully joined {pod_name} to Raft cluster")
+                      return True
+                  else:
+                      print(f"Failed to join {pod_name} to Raft cluster: {response.text}")
+                      return False
+              except Exception as e:
+                  print(f"Error joining {pod_name} to Raft cluster: {e}")
+                  return False
+          
+          def unseal_pod(pod_name, keys):
+              print(f"Unsealing {pod_name}...")
+              
+              # For non-leader pods, ensure they're joined to Raft first
+              if pod_name != 'openbao-0':
+                  if not join_raft_cluster(pod_name):
+                      print(f"Skipping unseal for {pod_name} - failed to join Raft cluster")
+                      return
+                  # Wait a bit after joining
+                  time.sleep(5)
+              
+              unsealed = False
+              for i, key in enumerate(keys[:3]):  # Use first 3 keys
+                  try:
+                      response = requests.post(
+                          f'http://{pod_name}.openbao-internal:8200/v1/sys/unseal',
+                          json={'key': key}
+                      )
+                      if response.status_code == 200:
+                          result = response.json()
+                          print(f"Unseal attempt {i+1} for {pod_name}: sealed={result.get('sealed', True)}")
+                          if not result.get('sealed', True):
+                              print(f"Successfully unsealed {pod_name}")
+                              unsealed = True
+                              break
+                      else:
+                          print(f"Unseal attempt {i+1} failed for {pod_name}: {response.text}")
+                  except Exception as e:
+                      print(f"Error unsealing {pod_name}: {e}")
+              
+              if not unsealed:
+                  print(f"Failed to unseal {pod_name} after all attempts")
+          
+          def main():
+              wait_for_pods()
+              
+              # Check if we have existing keys in secret
+              try:
+                  secret = v1.read_namespaced_secret(name='openbao-init-keys', namespace='openbao')
+                  print("Found existing keys secret")
+                  
+                  # Extract keys from secret
+                  keys = []
+                  for i in range(5):
+                      key_data = secret.data.get(f'unseal_key_{i}')
+                      if key_data:
+                          keys.append(base64.b64decode(key_data).decode())
+                  
+                  if len(keys) >= 3:
+                      print("Using existing keys to unseal pods...")
+                      # Unseal leader first, then followers
+                      unseal_pod('openbao-0', keys)
+                      time.sleep(5)  # Wait for leader to be fully ready
+                      
+                      for pod in ['openbao-1', 'openbao-2']:
+                          unseal_pod(pod, keys)
+                          time.sleep(3)  # Wait between followers
+                      
+                      print("Unsealing completed!")
+                      return
+                      
+              except client.exceptions.ApiException as e:
+                  if e.status != 404:  # Not found is expected if no secret exists
+                      print(f"Error reading existing secret: {e}")
+              
+              # If we get here, either no secret exists or initialization is needed
+              if check_initialization():
+                  print("OpenBao is initialized but no keys secret found - manual intervention needed")
+                  return
+              
+              # Full initialization needed
+              init_data = initialize_openbao()
+              store_keys(init_data)
+              
+              # Unseal all pods - leader first, then followers
+              keys = init_data['keys_base64']
+              unseal_pod('openbao-0', keys)
+              time.sleep(5)  # Wait for leader to be fully ready
+              
+              for pod in ['openbao-1', 'openbao-2']:
+                  unseal_pod(pod, keys)
+                  time.sleep(3)  # Wait between followers
+              
+              print("OpenBao initialization and unsealing completed!")
+          
+          if __name__ == '__main__':
+              main()
+          EOF
+          
+          # Run the initialization script
+          python /tmp/init_openbao.py
+        env:
+        - name: BAO_ADDR
+          value: "http://openbao-0.openbao-internal:8200"
+      volumes: []
+      initContainers:
+      - name: wait-for-openbao
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          # Wait for OpenBao service to be accessible (even if sealed/uninitialized)
+          until nc -z openbao-0.openbao-internal 8200; do
+            echo "Waiting for OpenBao service to be accessible..."
+            sleep 5
+          done
+          echo "OpenBao service is accessible"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-init
+  namespace: openbao
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-init
+  namespace: openbao
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"
+rules:
+- apiGroups: [""]
+  resources: ["pods", "secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-init
+  namespace: openbao
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"
+subjects:
+- kind: ServiceAccount
+  name: openbao-init
+  namespace: openbao
+roleRef:
+  kind: Role
+  name: openbao-init
+  apiGroup: rbac.authorization.k8s.io
