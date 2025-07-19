@@ -10,3 +10,4 @@
 *.tfstate.json
 clusters_configs
 .env
+state
