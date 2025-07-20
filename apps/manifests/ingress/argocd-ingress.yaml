@@ -15,10 +15,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - cd.orp-dev.eu
+    - auto.orp-dev.eu
     secretName: argocd-tls-secret # Name of the TLS secret to be created
   rules:
-  - host: "cd.orp-dev.eu"
+  - host: "auto.orp-dev.eu"
     http:
       paths:
       - path: /

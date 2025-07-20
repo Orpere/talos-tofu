@@ -102,17 +102,24 @@ display_table() {
     printf "%-20s | %s\n" "Key" "Value"
     printf "%-20s-+-%s\n" "--------------------" "----------------------------------------"
     
-    # Get root token
-    local root_token=$(decode_data "root-token" "$data")
+    # Get root token (try both naming conventions)
+    local root_token=$(decode_data "root_token" "$data")
+    if [[ "$root_token" == "N/A" ]]; then
+        root_token=$(decode_data "root-token" "$data")
+    fi
     if [[ "$root_token" != "N/A" ]]; then
         printf "%-20s | %s\n" "Root Token" "$root_token"
     fi
     
-    # Get unseal keys
+    # Get unseal keys (try both naming conventions)
     local i=0
     while true; do
-        local key_name="unseal-key-$i"
+        local key_name="unseal_key_$i"
         local key_value=$(decode_data "$key_name" "$data")
+        if [[ "$key_value" == "N/A" ]]; then
+            key_name="unseal-key-$i"
+            key_value=$(decode_data "$key_name" "$data")
+        fi
         if [[ "$key_value" == "N/A" ]]; then
             break
         fi
@@ -138,18 +145,25 @@ display_json() {
     
     local json_output="{}"
     
-    # Add root token
-    local root_token=$(decode_data "root-token" "$data")
+    # Add root token (try both naming conventions)
+    local root_token=$(decode_data "root_token" "$data")
+    if [[ "$root_token" == "N/A" ]]; then
+        root_token=$(decode_data "root-token" "$data")
+    fi
     if [[ "$root_token" != "N/A" ]]; then
         json_output=$(echo "$json_output" | jq --arg token "$root_token" '. + {"root_token": $token}')
     fi
     
-    # Add unseal keys
+    # Add unseal keys (try both naming conventions)
     local unseal_keys="[]"
     local i=0
     while true; do
-        local key_name="unseal-key-$i"
+        local key_name="unseal_key_$i"
         local key_value=$(decode_data "$key_name" "$data")
+        if [[ "$key_value" == "N/A" ]]; then
+            key_name="unseal-key-$i"
+            key_value=$(decode_data "$key_name" "$data")
+        fi
         if [[ "$key_value" == "N/A" ]]; then
             break
         fi
@@ -183,18 +197,25 @@ display_yaml() {
     echo "  namespace: $NAMESPACE"
     echo "  secret: $SECRET_NAME"
     
-    # Add root token
-    local root_token=$(decode_data "root-token" "$data")
+    # Add root token (try both naming conventions)
+    local root_token=$(decode_data "root_token" "$data")
+    if [[ "$root_token" == "N/A" ]]; then
+        root_token=$(decode_data "root-token" "$data")
+    fi
     if [[ "$root_token" != "N/A" ]]; then
         echo "  root_token: \"$root_token\""
     fi
     
-    # Add unseal keys
+    # Add unseal keys (try both naming conventions)
     local i=0
     local has_unseal_keys=false
     while true; do
-        local key_name="unseal-key-$i"
+        local key_name="unseal_key_$i"
         local key_value=$(decode_data "$key_name" "$data")
+        if [[ "$key_value" == "N/A" ]]; then
+            key_name="unseal-key-$i"
+            key_value=$(decode_data "$key_name" "$data")
+        fi
         if [[ "$key_value" == "N/A" ]]; then
             break
         fi
