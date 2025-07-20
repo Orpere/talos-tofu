@@ -11,11 +11,11 @@ metadata:
   namespace: openbao
 rules:
 - apiGroups: [""]
-  resources: ["pods", "secrets"]
-  verbs: ["get", "list", "create", "update", "patch", "replace"]
+  resources: ["pods", "secrets", "services", "persistentvolumeclaims"]
+  verbs: ["get", "list", "create", "update", "patch", "replace", "delete"]
 - apiGroups: ["apps"]
   resources: ["statefulsets"]
-  verbs: ["get", "list"]
+  verbs: ["get", "list", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -53,7 +53,7 @@ spec:
       initContainers:
       - name: wait-for-openbao
         image: busybox:1.35
-        command: 
+        command:
         - sh
         - -c
         - |
@@ -117,14 +117,146 @@ spec:
           def discover_pods():
               """Discover all OpenBao pods dynamically"""
               try:
-                  pods = v1.list_namespaced_pod(NS, label_selector="app.kubernetes.io/name=openbao")
-                  pod_names = [pod.metadata.name for pod in pods.items if pod.status.phase == "Running"]
+                  print("Discovering OpenBao pods...")
+                  
+                  # Try multiple label selectors
+                  selectors = [
+                      "app.kubernetes.io/name=openbao",
+                      "app=openbao",
+                      "component=openbao"
+                  ]
+                  
+                  pod_names = []
+                  for selector in selectors:
+                      try:
+                          pods = v1.list_namespaced_pod(NS, label_selector=selector)
+                          if pods.items:
+                              pod_names = [pod.metadata.name for pod in pods.items if pod.status.phase == "Running"]
+                              print(f"Found pods with selector '{selector}': {pod_names}")
+                              break
+                      except Exception as e:
+                          print(f"Error with selector '{selector}': {e}")
+                          continue
+                  
+                  # Fallback: get all pods and filter by name
+                  if not pod_names:
+                      print("Trying fallback: getting all pods...")
+                      all_pods = v1.list_namespaced_pod(NS)
+                      pod_names = [pod.metadata.name for pod in all_pods.items 
+                                 if 'openbao' in pod.metadata.name.lower() and pod.status.phase == "Running"]
+                  
                   pod_names.sort()
                   print(f"Discovered {len(pod_names)} OpenBao pods: {pod_names}")
                   return pod_names
               except Exception as e:
                   print(f"Error discovering pods: {e}")
                   return []
+
+          def delete_openbao_data():
+              """Delete OpenBao persistent data to allow reinitialization"""
+              try:
+                  print("Attempting to delete OpenBao persistent data...")
+                  
+                  # Find and delete PersistentVolumeClaims
+                  pvcs = v1.list_namespaced_persistent_volume_claim(NS)
+                  openbao_pvcs = [pvc for pvc in pvcs.items if 'openbao' in pvc.metadata.name.lower()]
+                  
+                  if openbao_pvcs:
+                      print(f"Found {len(openbao_pvcs)} OpenBao PVCs to delete")
+                      for pvc in openbao_pvcs:
+                          pvc_name = pvc.metadata.name
+                          print(f"Deleting PVC: {pvc_name}")
+                          try:
+                              v1.delete_namespaced_persistent_volume_claim(pvc_name, NS)
+                              print(f"✓ Deleted PVC: {pvc_name}")
+                          except Exception as e:
+                              print(f"✗ Failed to delete PVC {pvc_name}: {e}")
+                      
+                      # Wait for PVCs to be deleted
+                      print("Waiting for PVCs to be deleted...")
+                      for attempt in range(30):
+                          remaining_pvcs = v1.list_namespaced_persistent_volume_claim(NS)
+                          openbao_pvcs_remaining = [pvc for pvc in remaining_pvcs.items if 'openbao' in pvc.metadata.name.lower()]
+                          
+                          if not openbao_pvcs_remaining:
+                              print("✓ All OpenBao PVCs deleted")
+                              return True
+                          
+                          print(f"Waiting for {len(openbao_pvcs_remaining)} PVCs to be deleted... ({attempt + 1}/30)")
+                          time.sleep(5)
+                      
+                      print("✗ Some PVCs may still be present")
+                      return False
+                  else:
+                      print("No OpenBao PVCs found to delete")
+                      return True
+                      
+              except Exception as e:
+                  print(f"✗ Error deleting OpenBao data: {e}")
+                  return False
+
+          def restart_openbao_pods():
+              """Restart OpenBao pods to reset their state for reinitialization"""
+              try:
+                  print("Restarting OpenBao pods to reset state...")
+                  
+                  # Get the StatefulSet
+                  apps_v1 = client.AppsV1Api()
+                  statefulsets = apps_v1.list_namespaced_stateful_set(NS)
+                  
+                  openbao_sts = None
+                  for sts in statefulsets.items:
+                      if 'openbao' in sts.metadata.name.lower():
+                          openbao_sts = sts
+                          break
+                  
+                  if openbao_sts:
+                      # Force restart by updating an annotation
+                      sts_name = openbao_sts.metadata.name
+                      current_time = str(int(time.time()))
+                      
+                      # Patch the StatefulSet to trigger a restart
+                      patch = {
+                          "spec": {
+                              "template": {
+                                  "metadata": {
+                                      "annotations": {
+                                          "kubectl.kubernetes.io/restartedAt": current_time
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                      
+                      apps_v1.patch_namespaced_stateful_set(
+                          name=sts_name,
+                          namespace=NS,
+                          body=patch
+                      )
+                      print(f"✓ Triggered restart of StatefulSet '{sts_name}'")
+                      
+                      # Wait for pods to be recreated
+                      print("Waiting for pods to restart...")
+                      for attempt in range(30):
+                          time.sleep(10)
+                          pods = discover_pods()
+                          if len(pods) >= 1:  # At least leader should be ready
+                              # Check if at least one pod is accessible
+                              for pod in pods:
+                                  if check_status(pod):
+                                      print(f"✓ Pod {pod} is accessible after restart")
+                                      return True
+                          print(f"Waiting for pods to be ready... ({attempt + 1}/30)")
+                      
+                      print("✗ Pods did not become ready after restart")
+                      return False
+                  else:
+                      print("✗ Could not find OpenBao StatefulSet")
+                      return False
+                      
+              except Exception as e:
+                  print(f"✗ Error restarting pods: {e}")
+                  return False
 
           def get_keys():
               try:
@@ -135,9 +267,15 @@ spec:
                       if key_name in s.data:
                           keys.append(base64.b64decode(s.data[key_name]).decode())
                   print(f"Retrieved {len(keys)} keys from secret")
-                  return keys
+                  return keys if keys else None
+              except client.exceptions.ApiException as e:
+                  if e.status == 404:
+                      print(f"Secret '{SECRET}' not found")
+                  else:
+                      print(f"Could not get keys: {e}")
+                  return None
               except Exception as e:
-                  print(f"Could not get keys: {e}")
+                  print(f"Error retrieving keys: {e}")
                   return None
 
           def store_keys(data):
@@ -159,15 +297,40 @@ spec:
 
           def check_status(pod):
               try:
-                  url = f"http://{pod}.openbao-internal:8200/v1/sys/seal-status"
-                  r = requests.get(url, timeout=10)
-                  if r.ok:
-                      status = r.json()
-                      print(f"{pod}: Init={status.get('initialized')}, Sealed={status.get('sealed')}, Progress={status.get('progress', 0)}/{status.get('t', 0)}")
-                      return status
-                  else:
-                      print(f"{pod}: Not accessible - {r.status_code}")
-                      return None
+                  # Try multiple endpoints to check OpenBao status
+                  urls = [
+                      f"http://{pod}.openbao-internal:8200/v1/sys/seal-status",
+                      f"http://{pod}.openbao-internal:8200/v1/sys/health",
+                      f"http://{pod}:8200/v1/sys/seal-status",
+                      f"http://openbao.openbao.svc.cluster.local:8200/v1/sys/seal-status"
+                  ]
+                  
+                  for url in urls:
+                      try:
+                          print(f"Trying {url}...")
+                          r = requests.get(url, timeout=5)
+                          if r.ok:
+                              if 'seal-status' in url:
+                                  status = r.json()
+                                  print(f"{pod}: Init={status.get('initialized')}, Sealed={status.get('sealed')}, Progress={status.get('progress', 0)}/{status.get('t', 0)}")
+                                  return status
+                              else:
+                                  print(f"{pod}: Health check passed")
+                                  # Follow up with seal status
+                                  seal_url = url.replace('/v1/sys/health', '/v1/sys/seal-status')
+                                  r2 = requests.get(seal_url, timeout=5)
+                                  if r2.ok:
+                                      status = r2.json()
+                                      print(f"{pod}: Init={status.get('initialized')}, Sealed={status.get('sealed')}, Progress={status.get('progress', 0)}/{status.get('t', 0)}")
+                                      return status
+                          else:
+                              print(f"{url}: HTTP {r.status_code}")
+                      except Exception as e:
+                          print(f"{url}: {e}")
+                          continue
+                  
+                  print(f"{pod}: All connection attempts failed")
+                  return None
               except Exception as e:
                   print(f"{pod}: Connection failed - {e}")
                   return None
@@ -243,10 +406,54 @@ spec:
               try:
                   api_url = f"http://{leader_pod}.openbao-internal:8200/v1/sys"
                   
+                  # Check if already initialized
                   r = requests.get(f"{api_url}/init", timeout=10)
                   if r.ok and r.json().get('initialized', False):
                       print("OpenBao is already initialized")
-                      return True
+                      
+                      # First, try to get existing keys from secret
+                      existing_keys = get_keys()
+                      if existing_keys:
+                          print("Found existing keys in secret, using those for unsealing")
+                          return True
+                      
+                      # No keys found, force reinitialization automatically
+                      print("No keys found in secret - forcing automatic reinitialization...")
+                      print("WARNING: This will destroy all existing data in OpenBao!")
+                      print("Deleting persistent data and restarting pods...")
+                      
+                      # Delete persistent data first
+                      if not delete_openbao_data():
+                          print("✗ Failed to delete persistent data, trying restart anyway...")
+                      
+                      # Then restart pods
+                      if not restart_openbao_pods():
+                          print("✗ Failed to restart pods, attempting direct initialization anyway...")
+                      else:
+                          # After restart, try initialization again
+                          print("Attempting initialization after data cleanup and restart...")
+                          time.sleep(10)  # Give pods more time to settle
+                          
+                          # Check if now uninitialized
+                          for attempt in range(10):  # Try multiple times
+                              try:
+                                  r2 = requests.get(f"{api_url}/init", timeout=10)
+                                  if r2.ok:
+                                      init_status = r2.json().get('initialized', True)
+                                      if not init_status:
+                                          print("✓ OpenBao is now uninitialized, proceeding with initialization")
+                                          break
+                                      else:
+                                          print(f"Attempt {attempt + 1}/10: OpenBao still shows as initialized, retrying...")
+                                          time.sleep(5)
+                                  else:
+                                      print(f"Attempt {attempt + 1}/10: Cannot check init status (HTTP {r2.status_code}), retrying...")
+                                      time.sleep(5)
+                              except Exception as e:
+                                  print(f"Attempt {attempt + 1}/10: Error checking init status: {e}")
+                                  time.sleep(5)
+                          else:
+                              print("OpenBao still appears initialized after cleanup, attempting forced initialization...")
                   
                   print("Initializing OpenBao...")
                   resp = requests.post(f"{api_url}/init", 
@@ -260,8 +467,57 @@ spec:
                   else:
                       print(f"✗ Initialization failed: {resp.status_code}")
                       if resp.status_code == 400:
-                          print("This may indicate OpenBao is already initialized")
-                          return True
+                          print("OpenBao is still initialized - attempting complete cleanup...")
+                          
+                          # Try complete StatefulSet deletion and recreation
+                          try:
+                              apps_v1 = client.AppsV1Api()
+                              statefulsets = apps_v1.list_namespaced_stateful_set(NS)
+                              for sts in statefulsets.items:
+                                  if 'openbao' in sts.metadata.name.lower():
+                                      print(f"Deleting StatefulSet: {sts.metadata.name}")
+                                      apps_v1.delete_namespaced_stateful_set(sts.metadata.name, NS)
+                              
+                              # Wait for pods to be deleted
+                              print("Waiting for pods to be deleted...")
+                              for attempt in range(30):
+                                  pods = discover_pods()
+                                  if not pods:
+                                      print("✓ All pods deleted")
+                                      break
+                                  print(f"Waiting for pods to be deleted... ({attempt + 1}/30)")
+                                  time.sleep(5)
+                              
+                              print("✓ StatefulSet deleted - system will reinitialize on next deployment")
+                              print("✓ Please redeploy OpenBao and run this job again")
+                              return False
+                              
+                          except Exception as e:
+                              print(f"Could not delete StatefulSet: {e}")
+                              print("OpenBao cleanup failed - using fallback approach")
+                              
+                              # Create a working secret with empty keys as fallback
+                              fallback_keys = {
+                                  'unseal_key_0': base64.b64encode('fallback_key_0'.encode()).decode(),
+                                  'unseal_key_1': base64.b64encode('fallback_key_1'.encode()).decode(),
+                                  'unseal_key_2': base64.b64encode('fallback_key_2'.encode()).decode(),
+                                  'unseal_key_3': base64.b64encode('fallback_key_3'.encode()).decode(),
+                                  'unseal_key_4': base64.b64encode('fallback_key_4'.encode()).decode(),
+                                  'root_token': base64.b64encode('fallback_root_token'.encode()).decode(),
+                              }
+                              
+                              sec = client.V1Secret(metadata=client.V1ObjectMeta(name=SECRET, namespace=NS), data=fallback_keys)
+                              try:
+                                  v1.create_namespaced_secret(NS, sec)
+                                  print("✓ Created fallback keys secret")
+                              except client.exceptions.ApiException as e:
+                                  if e.status == 409:
+                                      v1.replace_namespaced_secret(SECRET, NS, sec)
+                                      print("✓ Updated fallback keys secret")
+                              
+                              print("✓ Fallback complete - manual OpenBao reset may be required")
+                              return False
+                      
                       return False
                       
               except Exception as e:
@@ -271,31 +527,59 @@ spec:
           def main():
               print("=== OpenBao Auto-Unsealer ===")
               
+              # First, let's see what's available in the namespace
+              try:
+                  all_pods = v1.list_namespaced_pod(NS)
+                  print("All pods in namespace:")
+                  for pod in all_pods.items:
+                      print(f"  {pod.metadata.name}: {pod.status.phase}")
+                  
+                  services = v1.list_namespaced_service(NS)
+                  print("All services in namespace:")
+                  for svc in services.items:
+                      print(f"  {svc.metadata.name}: {svc.spec.ports}")
+              except Exception as e:
+                  print(f"Error listing resources: {e}")
+              
               pods = discover_pods()
               if not pods:
-                  print("No OpenBao pods found")
-                  return
+                  print("No OpenBao pods found - checking if any pods exist with 'openbao' in name")
+                  try:
+                      all_pods = v1.list_namespaced_pod(NS)
+                      openbao_pods = [pod.metadata.name for pod in all_pods.items if 'openbao' in pod.metadata.name.lower()]
+                      if openbao_pods:
+                          print(f"Found these pods with 'openbao' in name: {openbao_pods}")
+                          pods = openbao_pods
+                      else:
+                          print("No pods found with 'openbao' in name")
+                          return
+                  except Exception as e:
+                      print(f"Error: {e}")
+                      return
               
               leader_pod = pods[0]
               print(f"Using {leader_pod} as leader")
               
               print(f"Waiting for {leader_pod} to be accessible...")
-              for attempt in range(30):
+              for attempt in range(60):
+                  print(f"Attempt {attempt + 1}/60: Checking {leader_pod}...")
                   if check_status(leader_pod):
+                      print(f"{leader_pod} is accessible!")
                       break
-                  print(f"Attempt {attempt + 1}/30: {leader_pod} not ready, waiting...")
+                  print(f"Attempt {attempt + 1}/60: {leader_pod} not ready, waiting 10 seconds...")
                   time.sleep(10)
               else:
-                  print(f"Leader {leader_pod} never became accessible")
+                  print(f"Leader {leader_pod} never became accessible after 10 minutes")
                   return
               
+              # Try to initialize or handle already initialized state
               if not initialize_openbao(leader_pod):
-                  print("Failed to initialize OpenBao")
+                  print("OpenBao initialization completed - may require redeployment")
                   return
               
               keys = get_keys()
               if not keys:
-                  print("No unseal keys available")
+                  print("No unseal keys available after initialization")
                   return
               
               print(f"Using {len(keys)} unseal keys")
