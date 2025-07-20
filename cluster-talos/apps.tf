@@ -70,13 +70,13 @@ resource "null_resource" "kustomize_apps" {
       done
       
       # Final check and extract the password
-      if kubectl get secret argocd-initial-admin-secret -n argocd >/dev/null 2>&1; then
-        kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d > ${path.cwd}/clusters_configs/${var.name}/argocd_password.txt
-        echo "ArgoCD admin password saved to ${path.cwd}/clusters_configs/${var.name}/argocd_password.txt"
-      else
-        echo "Error: ArgoCD initial admin secret still not found after 5 minutes. Something may be wrong with the ArgoCD installation."
-        exit 1
-      fi
+      # if kubectl get secret argocd-initial-admin-secret -n argocd >/dev/null 2>&1; then
+      #   kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d > ${path.cwd}/clusters_configs/${var.name}/argocd_password.txt
+      #   echo "ArgoCD admin password saved to ${path.cwd}/clusters_configs/${var.name}/argocd_password.txt"
+      # else
+      #   echo "Error: ArgoCD initial admin secret still not found after 5 minutes. Something may be wrong with the ArgoCD installation."
+      #   exit 1
+      # fi
 
       echo "Step 9/8: Applying additional manifests..."
       kubectl apply -f apps/manifests/ingress/
