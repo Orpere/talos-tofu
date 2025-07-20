@@ -1,0 +1,539 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-token-reviewer
+  namespace: openbao
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-token-reviewer
+rules:
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-token-reviewer
+subjects:
+- kind: ServiceAccount
+  name: openbao-token-reviewer
+  namespace: openbao
+roleRef:
+  kind: ClusterRole
+  name: openbao-token-reviewer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openbao-token-reviewer-token
+  namespace: openbao
+  annotations:
+    kubernetes.io/service-account.name: openbao-token-reviewer
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-auth-setup
+  namespace: openbao
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-auth-setup
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-auth-setup
+subjects:
+- kind: ServiceAccount
+  name: openbao-auth-setup
+  namespace: openbao
+roleRef:
+  kind: ClusterRole
+  name: openbao-auth-setup
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openbao-auth-setup
+  namespace: openbao
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: openbao-auth-setup
+    spec:
+      serviceAccountName: openbao-auth-setup
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: wait-for-openbao
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for OpenBao to be unsealed and ready..."
+          max_attempts=60
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt/$max_attempts: Checking OpenBao..."
+            
+            # Test basic connectivity first
+            if wget -q --timeout=10 --tries=1 --spider http://openbao.openbao.svc.cluster.local:8200 2>/dev/null; then
+              echo "Basic connectivity OK"
+              
+              # Test health endpoint
+              if wget -q --timeout=10 --tries=1 --spider http://openbao.openbao.svc.cluster.local:8200/v1/sys/health 2>/dev/null; then
+                echo "Health endpoint accessible"
+                
+                # Get actual health status
+                health_response=$(wget -qO- --timeout=10 http://openbao.openbao.svc.cluster.local:8200/v1/sys/health 2>/dev/null || echo "failed")
+                echo "Health response: $health_response"
+                
+                # Check if unsealed (sealed=false in response)
+                if echo "$health_response" | grep -q '"sealed":false'; then
+                  echo "OpenBao is unsealed and ready for configuration!"
+                  exit 0
+                else
+                  echo "OpenBao is still sealed or initializing..."
+                fi
+              else
+                echo "Health endpoint not accessible"
+              fi
+            else
+              echo "Basic connectivity failed"
+            fi
+            
+            echo "Waiting 15 seconds before next attempt..."
+            sleep 15
+          done
+          
+          echo "ERROR: OpenBao did not become ready after $max_attempts attempts"
+          echo "Final connectivity test:"
+          wget -v --timeout=10 --tries=1 http://openbao.openbao.svc.cluster.local:8200/v1/sys/health || true
+          exit 1
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      containers:
+      - name: openbao-auth-setup
+        image: python:3.11-alpine
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          
+          mkdir -p /tmp/.cache/pip /tmp/.local
+          export PIP_CACHE_DIR=/tmp/.cache/pip
+          export PYTHONUSERBASE=/tmp/.local
+          export PATH=$PATH:/tmp/.local/bin
+          
+          pip install --user --disable-pip-version-check kubernetes requests
+          
+          echo "Starting OpenBao Kubernetes Auth setup..."
+          
+          cat > /tmp/setup_auth.py << 'PYTHON_SCRIPT'
+          import os, time, base64, requests, json
+          from kubernetes import client, config
+
+          config.load_incluster_config()
+          v1 = client.CoreV1Api()
+          NS = "openbao"
+          SECRET = "openbao-init-keys"
+          VAULT_ADDR = "http://openbao.openbao.svc.cluster.local:8200"
+
+          def get_root_token():
+              try:
+                  secret = v1.read_namespaced_secret(SECRET, NS)
+                  if 'root_token' in secret.data:
+                      token = base64.b64decode(secret.data['root_token']).decode()
+                      print("Retrieved root token from secret")
+                      return token
+                  else:
+                      print("Root token not found in secret")
+                      return None
+              except Exception as e:
+                  print(f"Error retrieving root token: {e}")
+                  return None
+
+          def get_kubernetes_info():
+              try:
+                  # Get the token reviewer JWT from the dedicated secret
+                  secret = v1.read_namespaced_secret("openbao-token-reviewer-token", "openbao")
+                  if 'token' in secret.data:
+                      reviewer_token = base64.b64decode(secret.data['token']).decode()
+                      print("Retrieved token reviewer JWT from secret")
+                  else:
+                      print("Token not found in openbao-token-reviewer-token secret")
+                      return None, None, None
+                  
+                  # Get CA cert from the same secret
+                  if 'ca.crt' in secret.data:
+                      ca_cert = base64.b64decode(secret.data['ca.crt']).decode()
+                      print("Retrieved CA cert from token reviewer secret")
+                  else:
+                      # Fallback to current pod's CA cert
+                      with open('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'r') as f:
+                          ca_cert = f.read()
+                      print("Using fallback CA cert from current pod")
+                  
+                  k8s_host = "https://kubernetes.default.svc.cluster.local:443"
+                  
+                  print("Retrieved Kubernetes cluster information with token reviewer JWT")
+                  return reviewer_token, ca_cert, k8s_host
+              except Exception as e:
+                  print(f"Error getting Kubernetes info: {e}")
+                  # Fallback to original method for backward compatibility
+                  try:
+                      with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as f:
+                          sa_token = f.read().strip()
+                      
+                      with open('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'r') as f:
+                          ca_cert = f.read()
+                      
+                      k8s_host = "https://kubernetes.default.svc.cluster.local:443"
+                      
+                      print("Using fallback method with current pod's service account token")
+                      return sa_token, ca_cert, k8s_host
+                  except Exception as fallback_e:
+                      print(f"Fallback also failed: {fallback_e}")
+                      return None, None, None
+
+          def make_vault_request(method, path, token, data=None):
+              url = f"{VAULT_ADDR}/v1/{path}"
+              headers = {"X-Vault-Token": token}
+              
+              try:
+                  if method.upper() == "GET":
+                      response = requests.get(url, headers=headers, timeout=30)
+                  elif method.upper() == "POST":
+                      response = requests.post(url, headers=headers, json=data, timeout=30)
+                  elif method.upper() == "PUT":
+                      response = requests.put(url, headers=headers, json=data, timeout=30)
+                  else:
+                      raise ValueError(f"Unsupported method: {method}")
+                  
+                  return response
+              except Exception as e:
+                  print(f"Error making {method} request to {path}: {e}")
+                  return None
+
+          def setup_kubernetes_auth(root_token):
+              try:
+                  print("Setting up Kubernetes authentication...")
+                  
+                  sa_token, ca_cert, k8s_host = get_kubernetes_info()
+                  if not all([sa_token, ca_cert, k8s_host]):
+                      return False
+                  
+                  print("Checking if Kubernetes auth is enabled...")
+                  response = make_vault_request("GET", "sys/auth", root_token)
+                  if response and response.ok:
+                      auth_methods = response.json()
+                      if "kubernetes/" not in auth_methods.get("data", {}):
+                          print("Enabling Kubernetes auth method...")
+                          enable_response = make_vault_request("POST", "sys/auth/kubernetes", root_token, {
+                              "type": "kubernetes"
+                          })
+                          if not enable_response or not enable_response.ok:
+                              print(f"Failed to enable Kubernetes auth: {enable_response.status_code if enable_response else 'No response'}")
+                              return False
+                          print("Kubernetes auth method enabled")
+                      else:
+                          print("Kubernetes auth method already enabled")
+                  else:
+                      print("Failed to check auth methods")
+                      return False
+                  
+                  print("Configuring Kubernetes auth with token reviewer JWT...")
+                  config_data = {
+                      "kubernetes_host": k8s_host,
+                      "kubernetes_ca_cert": ca_cert,
+                      "token_reviewer_jwt": sa_token  # This is now the token reviewer JWT
+                  }
+                  
+                  config_response = make_vault_request("POST", "auth/kubernetes/config", root_token, config_data)
+                  if not config_response or not config_response.ok:
+                      print(f"Failed to configure Kubernetes auth: {config_response.status_code if config_response else 'No response'}")
+                      return False
+                  
+                  print("Kubernetes auth configured successfully")
+                  return True
+                  
+              except Exception as e:
+                  print(f"Error setting up Kubernetes auth: {e}")
+                  return False
+
+          def create_external_secrets_policy(root_token):
+              try:
+                  print("Creating external-secrets policy...")
+                  
+                  policy_rules = '''
+          path "kv/data/*" {
+            capabilities = ["read", "list"]
+          }
+
+          path "kv/metadata/*" {
+            capabilities = ["read", "list"]
+          }
+          '''
+                  
+                  policy_data = {"policy": policy_rules}
+                  response = make_vault_request("PUT", "sys/policies/acl/external-secrets-policy", root_token, policy_data)
+                  
+                  if response and response.ok:
+                      print("External-secrets policy created")
+                      return True
+                  else:
+                      print(f"Failed to create policy: {response.status_code if response else 'No response'}")
+                      return False
+                      
+              except Exception as e:
+                  print(f"Error creating policy: {e}")
+                  return False
+
+          def create_kubernetes_role(root_token):
+              try:
+                  print("Creating Kubernetes role for external-secrets...")
+                  
+                  role_data = {
+                      "bound_service_account_names": ["external-secrets"],
+                      "bound_service_account_namespaces": ["external-secrets"],
+                      "policies": ["external-secrets-policy"],
+                      "ttl": "1h",
+                      "max_ttl": "24h"
+                  }
+                  
+                  response = make_vault_request("POST", "auth/kubernetes/role/external-secrets", root_token, role_data)
+                  
+                  if response and response.ok:
+                      print("Kubernetes role 'external-secrets' created")
+                      return True
+                  else:
+                      print(f"Failed to create role: {response.status_code if response else 'No response'}")
+                      return False
+                      
+              except Exception as e:
+                  print(f"Error creating role: {e}")
+                  return False
+
+          def enable_kv_engine(root_token):
+              try:
+                  print("Checking KV secrets engine...")
+                  
+                  response = make_vault_request("GET", "sys/mounts", root_token)
+                  if response and response.ok:
+                      mounts = response.json()
+                      if "kv/" not in mounts.get("data", {}):
+                          print("Enabling KV v2 secrets engine...")
+                          enable_data = {
+                              "type": "kv",
+                              "options": {"version": "2"}
+                          }
+                          enable_response = make_vault_request("POST", "sys/mounts/kv", root_token, enable_data)
+                          if enable_response and enable_response.ok:
+                              print("KV v2 secrets engine enabled")
+                              return True
+                          else:
+                              print(f"Failed to enable KV engine: {enable_response.status_code if enable_response else 'No response'}")
+                              return False
+                      else:
+                          print("KV secrets engine already enabled")
+                          return True
+                  else:
+                      print("Failed to check mounted engines")
+                      return False
+                      
+              except Exception as e:
+                  print(f"Error with KV engine: {e}")
+                  return False
+
+          def create_test_secret(root_token):
+              try:
+                  print("Creating test secret...")
+                  
+                  test_data = {
+                      "data": {
+                          "username": "test-user",
+                          "password": "test-password",
+                          "message": "Hello from OpenBao!"
+                      }
+                  }
+                  
+                  response = make_vault_request("POST", "kv/data/test-secret", root_token, test_data)
+                  
+                  if response and response.ok:
+                      print("Test secret 'kv/test-secret' created")
+                      return True
+                  else:
+                      print(f"Failed to create test secret: {response.status_code if response else 'No response'}")
+                      return False
+                      
+              except Exception as e:
+                  print(f"Error creating test secret: {e}")
+                  return False
+
+          def main():
+              print("=== OpenBao Kubernetes Auth Setup ===")
+              
+              # Get root token first
+              root_token = get_root_token()
+              if not root_token:
+                  print("Cannot proceed without root token")
+                  return
+              
+              # Wait and verify OpenBao is accessible with better debugging
+              print("Verifying OpenBao accessibility with detailed checks...")
+              max_attempts = 20
+              wait_time = 15
+              
+              for attempt in range(max_attempts):
+                  print(f"Attempt {attempt + 1}/{max_attempts}: Checking OpenBao health...")
+                  
+                  # Try multiple endpoints to debug connectivity
+                  test_urls = [
+                      f"{VAULT_ADDR}/v1/sys/health",
+                      f"{VAULT_ADDR}/v1/sys/seal-status", 
+                      f"{VAULT_ADDR}/ui/"
+                  ]
+                  
+                  for test_url in test_urls:
+                      try:
+                          print(f"  Testing: {test_url}")
+                          response = requests.get(test_url, timeout=10)
+                          print(f"  Response: {response.status_code}")
+                          if response.ok:
+                              if "/sys/health" in test_url:
+                                  health_data = response.json()
+                                  print(f"  Health: {health_data}")
+                                  if not health_data.get("sealed", True):
+                                      print("OpenBao is accessible and unsealed!")
+                                      break
+                              elif "/sys/seal-status" in test_url:
+                                  seal_data = response.json()
+                                  print(f"  Seal Status: {seal_data}")
+                                  if not seal_data.get("sealed", True):
+                                      print("OpenBao is accessible and unsealed!")
+                                      break
+                          else:
+                              print(f"  HTTP Error: {response.status_code} - {response.text[:100]}")
+                      except Exception as e:
+                          print(f"  Connection Error: {e}")
+                  
+                  # Now try with authentication
+                  try:
+                      print(f"  Testing authenticated request...")
+                      health_response = make_vault_request("GET", "sys/health", root_token)
+                      if health_response and health_response.ok:
+                          health_data = health_response.json()
+                          print(f"  Authenticated Health: {health_data}")
+                          if not health_data.get("sealed", True):
+                              print("OpenBao is accessible and unsealed with authentication!")
+                              break
+                      else:
+                          print(f"  Authenticated request failed: {health_response.status_code if health_response else 'No response'}")
+                  except Exception as e:
+                      print(f"  Authenticated request error: {e}")
+                  
+                  if attempt < max_attempts - 1:
+                      print(f"  Waiting {wait_time} seconds before next attempt...")
+                      time.sleep(wait_time)
+              else:
+                  print("OpenBao is not accessible after all attempts")
+                  print("Debug: Checking if OpenBao pods are running...")
+                  try:
+                      # Try to get some debug info about the OpenBao state
+                      from kubernetes import client
+                      v1 = client.CoreV1Api()
+                      pods = v1.list_namespaced_pod("openbao")
+                      print("OpenBao namespace pods:")
+                      for pod in pods.items:
+                          print(f"  {pod.metadata.name}: {pod.status.phase}")
+                          if pod.status.container_statuses:
+                              for container in pod.status.container_statuses:
+                                  print(f"    {container.name}: ready={container.ready}, restart_count={container.restart_count}")
+                  except Exception as e:
+                      print(f"Failed to get debug info: {e}")
+                  return
+              
+              print("OpenBao is accessible and unsealed")
+              
+              steps = [
+                  ("Enable KV secrets engine", lambda: enable_kv_engine(root_token)),
+                  ("Setup Kubernetes authentication", lambda: setup_kubernetes_auth(root_token)),
+                  ("Create external-secrets policy", lambda: create_external_secrets_policy(root_token)),
+                  ("Create Kubernetes role", lambda: create_kubernetes_role(root_token)),
+                  ("Create test secret", lambda: create_test_secret(root_token))
+              ]
+              
+              success_count = 0
+              for step_name, step_func in steps:
+                  print(f"\n--- {step_name} ---")
+                  if step_func():
+                      success_count += 1
+                  else:
+                      print(f"Step failed: {step_name}")
+              
+              print(f"\n=== Summary ===")
+              print(f"Completed {success_count}/{len(steps)} steps successfully")
+              
+              if success_count == len(steps):
+                  print("OpenBao Kubernetes authentication setup completed successfully!")
+                  print("External Secrets Operator can now connect to OpenBao")
+                  print("Test secret created at 'kv/test-secret'")
+              else:
+                  print("Some setup steps failed - please check the logs")
+
+          if __name__ == "__main__":
+              main()
+          PYTHON_SCRIPT
+          
+          python /tmp/setup_auth.py
