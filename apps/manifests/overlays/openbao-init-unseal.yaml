@@ -477,8 +477,16 @@ spec:
                           try:
                               apps_v1 = client.AppsV1Api()
                               statefulsets = apps_v1.list_namespaced_stateful_set(NS)
+                              openbao_sts_spec = None
+                              
                               for sts in statefulsets.items:
                                   if 'openbao' in sts.metadata.name.lower():
+                                      print(f"Backing up StatefulSet spec: {sts.metadata.name}")
+                                      # Store the StatefulSet spec for recreation
+                                      openbao_sts_spec = {
+                                          'name': sts.metadata.name,
+                                          'spec': sts.spec
+                                      }
                                       print(f"Deleting StatefulSet: {sts.metadata.name}")
                                       apps_v1.delete_namespaced_stateful_set(sts.metadata.name, NS)
                               
@@ -492,9 +500,46 @@ spec:
                                   print(f"Waiting for pods to be deleted... ({attempt + 1}/30)")
                                   time.sleep(5)
                               
-                              print("✓ StatefulSet deleted - system will reinitialize on next deployment")
-                              print("✓ Please redeploy OpenBao and run this job again")
-                              return False
+                              # Recreate the StatefulSet if we have the spec
+                              if openbao_sts_spec:
+                                  print(f"Recreating StatefulSet: {openbao_sts_spec['name']}")
+                                  
+                                  # Create new StatefulSet with the same spec
+                                  new_sts = client.V1StatefulSet(
+                                      metadata=client.V1ObjectMeta(
+                                          name=openbao_sts_spec['name'],
+                                          namespace=NS
+                                      ),
+                                      spec=openbao_sts_spec['spec']
+                                  )
+                                  
+                                  apps_v1.create_namespaced_stateful_set(NS, new_sts)
+                                  print(f"✓ StatefulSet {openbao_sts_spec['name']} recreated")
+                                  
+                                  # Wait for new pods to be ready
+                                  print("Waiting for new pods to be ready...")
+                                  for attempt in range(60):
+                                      time.sleep(10)
+                                      pods = discover_pods()
+                                      if len(pods) >= 1:
+                                          # Check if at least one pod is accessible
+                                          ready_pods = 0
+                                          for pod in pods:
+                                              if check_status(pod):
+                                                  ready_pods += 1
+                                          
+                                          if ready_pods >= 1:
+                                              print(f"✓ {ready_pods} pod(s) are ready after recreation")
+                                              return False  # Return False to trigger fresh initialization
+                                      
+                                      print(f"Waiting for pods to be ready... ({attempt + 1}/60)")
+                                  
+                                  print("✗ Pods did not become ready after recreation")
+                                  return False
+                              else:
+                                  print("✓ StatefulSet deleted - system will reinitialize on next deployment")
+                                  print("✓ Please redeploy OpenBao and run this job again")
+                                  return False
                               
                           except Exception as e:
                               print(f"Could not delete StatefulSet: {e}")
@@ -577,9 +622,44 @@ spec:
                   return
               
               # Try to initialize or handle already initialized state
-              if not initialize_openbao(leader_pod):
-                  print("OpenBao initialization completed - may require redeployment")
-                  return
+              initialization_attempts = 0
+              max_attempts = 3
+              
+              while initialization_attempts < max_attempts:
+                  initialization_attempts += 1
+                  print(f"\n=== Initialization Attempt {initialization_attempts}/{max_attempts} ===")
+                  
+                  if initialize_openbao(leader_pod):
+                      print("✓ Initialization successful")
+                      break
+                  elif initialization_attempts < max_attempts:
+                      print(f"Initialization attempt {initialization_attempts} failed, retrying...")
+                      # Wait for pods to stabilize after potential recreation
+                      time.sleep(30)
+                      
+                      # Rediscover pods in case they were recreated
+                      pods = discover_pods()
+                      if not pods:
+                          print("No OpenBao pods found after recreation attempt")
+                          return
+                      
+                      leader_pod = pods[0]
+                      print(f"Using {leader_pod} as new leader")
+                      
+                      # Wait for new leader to be accessible
+                      print(f"Waiting for new leader {leader_pod} to be accessible...")
+                      for attempt in range(30):
+                          if check_status(leader_pod):
+                              print(f"{leader_pod} is accessible!")
+                              break
+                          print(f"Attempt {attempt + 1}/30: {leader_pod} not ready, waiting 10 seconds...")
+                          time.sleep(10)
+                      else:
+                          print(f"New leader {leader_pod} never became accessible")
+                          continue
+                  else:
+                      print("OpenBao initialization failed after all attempts")
+                      return
               
               keys = get_keys()
               if not keys:

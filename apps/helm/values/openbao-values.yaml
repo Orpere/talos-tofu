@@ -8,7 +8,7 @@
 # - Agent injection for secrets
 # - Pod anti-affinity for resilience
 #
-# Access: https://vault.orp-dev.eu
+# Access: https://v.orp-dev.eu
 
 global:
   enabled: true
@@ -16,7 +16,7 @@ global:
   # TLS is terminated at the ingress level
   tlsDisable: true
   # External HTTPS access via ingress (comment out to deploy server in cluster)
-  # externalBaoAddr: "https://vault.orp-dev.eu"
+  # externalBaoAddr: "https://v.orp-dev.eu"
 
   # Disable PodSecurityPolicy (deprecated in Kubernetes 1.25+)
   psp:
@@ -244,14 +244,14 @@ server:
     # When HA mode is enabled and K8s service registration is being used, configure the ingress to point to the OpenBao active service
     activeService: true
     hosts:
-      - host: vault.orp-dev.eu
+      - host: v.orp-dev.eu
         paths: ["/"]
     ## Extra paths to prepend to the host configuration
     extraPaths: []
     tls:
       - secretName: openbao-tls
         hosts:
-          - vault.orp-dev.eu
+          - v.orp-dev.eu
 
   # hostAliases is a list of aliases to be added to /etc/hosts
   hostAliases: []
