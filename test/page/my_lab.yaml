@@ -76,10 +76,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - mylab.orp-dev.eu
+        - mylac.orp-dev.eu
       secretName: mylab-nginx-tls
   rules:
-    - host: mylab.orp-dev.eu
+    - host: mylac.orp-dev.eu
       http:
         paths:
           - path: /

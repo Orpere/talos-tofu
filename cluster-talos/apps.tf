@@ -36,7 +36,11 @@ resource "null_resource" "kustomize_apps" {
       echo "Step 3/8: Creating ArgoCD namespace..."
       kubectl create namespace argocd || true
       sleep 60
-      
+
+      echo "Step 3.1/8: Creating openbao namespace..."
+      kubectl create namespace openbao || true
+      sleep 10
+
       echo "Step 4/8: Applying overlays..."
       kubectl apply -f apps/manifests/overlays/
       sleep 60
